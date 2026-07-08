@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俄羅斯方塊 - Tetris</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a2e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #fff;
+            /* Prevent pull-to-refresh and zoom on mobile */
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+        }
+
+        .game-container {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        .board-wrapper {
+            position: relative;
+        }
+
+        #game-board {
+            border: 3px solid #4a90d9;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(74, 144, 217, 0.4), inset 0 0 20px rgba(0,0,0,0.5);
+            background: #1a1a3e;
+            display: block;
+        }
+
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 180px;
+        }
+
+        .panel-box {
+            background: rgba(26, 26, 62, 0.9);
+            border: 2px solid #4a90d9;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 0 15px rgba(74, 144, 217, 0.2);
+        }
+
+        .panel-box h3 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #4a90d9;
+        }
+
+        #next-piece-canvas {
+            display: block;
+            margin: 0 auto;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            text-align: center;
+            color: #7fdbca;
+            text-shadow: 0 0 10px rgba(127, 219, 202, 0.5);
+        }
+
+        #hold-piece-canvas {
+            display: block;
+            margin: 0 auto;
+        }
+
+        .combo-text {
+            font-size: 14px;
+            color: #ff6b9d;
+            text-align: center;
+            min-height: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(255, 107, 157, 0.6);
+        }
+
+        .controls-info {
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        .controls-info div {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .key-badge {
+            background: #4a90d9;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+            z-index: 10;
+        }
+
+        #overlay.hidden {
+            display: none;
+        }
+
+        #overlay h2 {
+            font-size: 36px;
+            margin-bottom: 16px;
+            text-shadow: 0 0 20px rgba(74, 144, 217, 0.8);
+        }
+
+        #overlay p {
+            font-size: 16px;
+            color: #aaa;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            background: #4a90d9;
+            color: #fff;
+            border: none;
+            padding: 12px 32px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: #5aa0e9;
+            box-shadow: 0 0 20px rgba(74, 144, 217, 0.6);
+            transform: scale(1.05);
+        }
+
+        .title-text {
+            font-size: 48px;
+            background: linear-gradient(135deg, #ff6b9d, #c44dff, #4a90d9, #7fdbca);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .game-over-score {
+            font-size: 20px;
+            color: #7fdbca;
+            margin-bottom: 16px;
+        }
+
+        /* === MOBILE LAYOUT === */
+        .mobile-controls {
+            display: none; /* hidden on desktop */
+        }
+
+        .mobile-stats {
+            display: none; /* hidden on desktop */
+        }
+
+        /* Tablet: 601px - 1024px */
+        @media (max-width: 1024px) and (min-width: 601px) {
+            .game-container {
+                flex-direction: column;
+                align-items: center;
+                gap: 16px;
+            }
+
+            .side-panel {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+                min-width: auto;
+                max-width: 600px;
+                gap: 8px;
+            }
+
+            .side-panel .panel-box {
+                padding: 10px;
+                min-width: 120px;
+            }
+
+            .side-panel .panel-box h3 {
+                font-size: 12px;
+            }
+
+            .stat-value {
+                font-size: 22px;
+            }
+
+            .controls-info {
+                display: none;
+            }
+        }
+
+        /* Mobile: <= 600px — Re-Designed for max game canvas */
+        @media (max-width: 600px) {
+            .game-container {
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+                padding: 4px;
+            }
+
+            .side-panel {
+                display: none; /* hide the desktop side-panel */
+            }
+
+            /* Hide desktop preview canvases on mobile */
+            #next-piece-canvas,
+            #hold-piece-canvas,
+            #next-piece-canvas-mobile,
+            #hold-piece-canvas-mobile {
+                display: none;
+            }
+
+            /* Compact info bar (no panel boxes — just text) */
+            .mobile-stats {
+                display: flex;
+                flex-direction: row;
+                justify-content: space-between;
+                width: 100%;
+                max-width: 360px;
+                padding: 4px 8px;
+                font-size: 12px;
+                color: #aaa;
+            }
+
+            .mobile-stats .mobile-stat-label {
+                font-size: 10px;
+                color: #888;
+            }
+
+            .mobile-stats .stat-value {
+                font-size: 14px;
+                color: #fff;
+            }
+
+            /* Mini preview indicators (inline, tiny) */
+            .mobile-previews {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                gap: 6px;
+                width: 100%;
+                max-width: 360px;
+                padding: 0 8px;
+            }
+
+            .mobile-previews .mini-preview {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 2px;
+            }
+
+            .mobile-previews .mini-preview-label {
+                font-size: 9px;
+                color: #888;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .mobile-previews canvas {
+                display: block !important;
+                width: 56px;
+                height: 56px;
+                background: rgba(26, 26, 62, 0.8);
+                border-radius: 8px;
+            }
+
+            /* Combo display (inline with previews) */
+            .combo-text {
+                font-size: 10px;
+                color: #00f5ff;
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s;
+            }
+            .combo-text.active {
+                max-height: 20px;
+            }
+
+            /* Control pad — compact */
+            .mobile-controls {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+                max-width: 360px;
+                padding: 4px 0;
+            }
+
+            .control-row {
+                display: flex;
+                justify-content: center;
+                gap: 8px;
+                width: 100%;
+            }
+
+            /* Base button style */
+            .ctrl-btn {
+                background: rgba(74, 144, 217, 0.3);
+                border: 2px solid #4a90d9;
+                border-radius: 12px;
+                color: #fff;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 12px 16px;
+                min-width: 52px;
+                min-height: 50px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: background 0.1s, transform 0.1s;
+                -webkit-tap-highlight-color: transparent;
+                touch-action: manipulation;
+            }
+
+            .ctrl-btn:active {
+                background: rgba(74, 144, 217, 0.7);
+                transform: scale(0.95);
+                box-shadow: 0 0 15px rgba(74, 144, 217, 0.5);
+            }
+
+            /* Hold button (special) */
+            .ctrl-btn.hold-btn {
+                background: rgba(196, 77, 255, 0.3);
+                border-color: #c44dff;
+                font-size: 12px;
+            }
+
+            .ctrl-btn.hold-btn:active {
+                background: rgba(196, 77, 255, 0.7);
+                box-shadow: 0 0 15px rgba(196, 77, 255, 0.5);
+            }
+
+            /* Action buttons (right side) */
+            .ctrl-btn.action-btn {
+                background: rgba(255, 107, 157, 0.3);
+                border-color: #ff6b9d;
+                font-size: 14px;
+            }
+
+            .ctrl-btn.action-btn:active {
+                background: rgba(255, 107, 157, 0.7);
+                box-shadow: 0 0 15px rgba(255, 107, 157, 0.5);
+            }
+
+            /* Rotate button - larger, more accessible */
+            .ctrl-btn.rotate-btn {
+                background: rgba(0, 245, 255, 0.3);
+                border-color: #00f5ff;
+                font-size: 22px;
+                min-width: 64px;
+                min-height: 56px;
+            }
+
+            .ctrl-btn.rotate-btn:active {
+                background: rgba(0, 245, 255, 0.7);
+                box-shadow: 0 0 15px rgba(0, 245, 255, 0.5);
+            }
+
+            /* Hard drop button */
+            .ctrl-btn.drop-btn {
+                background: rgba(255, 71, 87, 0.3);
+                border-color: #ff4757;
+                font-size: 16px;
+            }
+
+            .ctrl-btn.drop-btn:active {
+                background: rgba(255, 71, 87, 0.7);
+                box-shadow: 0 0 15px rgba(255, 71, 87, 0.5);
+            }
+
+            /* Center pad layout */
+            .control-row.dpad-row {
+                gap: 10px;
+            }
+
+            .control-row.dpad-row .ctrl-btn {
+                min-width: 64px;
+                min-height: 56px;
+                font-size: 22px;
+            }
+
+            /* Hold + Pause row */
+            .control-row.option-row .ctrl-btn {
+                min-width: 96px;
+                font-size: 12px;
+                letter-spacing: 0.5px;
+            }
+        }
+
+        /* Line clear animation */
+        @keyframes lineClear {
+            0% { background: rgba(255, 255, 255, 0.8); }
+            100% { background: transparent; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Mobile compact info bar (hidden on desktop) -->
+        <div class="mobile-stats">
+            <div><span class="mobile-stat-label">分數</span> <span class="stat-value" id="score">0</span></div>
+            <div><span class="mobile-stat-label">等級</span> <span class="stat-value" id="level">1</span></div>
+            <div><span class="mobile-stat-label">行數</span> <span class="stat-value" id="lines">0</span></div>
+        </div>
+
+        <!-- Mobile mini preview indicators (hidden on desktop) -->
+        <div class="mobile-previews">
+            <div class="mini-preview">
+                <span class="mini-preview-label">NEXT</span>
+                <canvas id="next-piece-canvas-mobile" width="112" height="112"></canvas>
+            </div>
+            <div class="mini-preview">
+                <span class="mini-preview-label">HOLD</span>
+                <canvas id="hold-piece-canvas-mobile" width="112" height="112"></canvas>
+            </div>
+            <div class="combo-text" id="combo-display"></div>
+        </div>
+
+        <div class="board-wrapper">
+            <canvas id="game-board" width="300" height="600"></canvas>
+            <div id="overlay">
+                <div class="title-text">俄羅斯方塊</div>
+                <p>TETRIS</p>
+                <button class="btn" id="start-btn">開始遊戲</button>
+            </div>
+        </div>
+
+        <!-- Desktop side-panel -->
+        <div class="side-panel">
+            <div class="panel-box">
+                <h3>下一個</h3>
+                <canvas id="next-piece-canvas" width="120" height="120"></canvas>
+            </div>
+
+            <div class="panel-box">
+                <h3>保留 (C)</h3>
+                <canvas id="hold-piece-canvas" width="120" height="120"></canvas>
+                <div class="combo-text" id="combo-display"></div>
+            </div>
+
+            <div class="panel-box">
+                <h3>分數</h3>
+                <div class="stat-value" id="score">0</div>
+            </div>
+
+            <div class="panel-box">
+                <h3>等級</h3>
+                <div class="stat-value" id="level">1</div>
+            </div>
+
+            <div class="panel-box">
+                <h3>行數</h3>
+                <div class="stat-value" id="lines">0</div>
+            </div>
+
+            <div class="panel-box controls-info">
+                <h3>操作</h3>
+                <div><span>移動</span><span class="key-badge">← →</span></div>
+                <div><span>旋轉</span><span class="key-badge">↑ / X</span></div>
+                <div><span>保留</span><span class="key-badge">C</span></div>
+                <div><span>軟降</span><span class="key-badge">↓</span></div>
+                <div><span>硬降</span><span class="key-badge">Space</span></div>
+                <div><span>暫停</span><span class="key-badge">P</span></div>
+            </div>
+        </div>
+
+        <!-- Mobile control pad (hidden on desktop) -->
+        <div class="mobile-controls">
+            <!-- Row 1: Hold + Pause + Hard Drop -->
+            <div class="control-row option-row">
+                <button class="ctrl-btn hold-btn" id="ctrl-hold" aria-label="保留">保留</button>
+                <button class="ctrl-btn" id="ctrl-pause" aria-label="暫停">暫停</button>
+                <button class="ctrl-btn drop-btn" id="ctrl-drop" aria-label="硬降">硬降 ⤓</button>
+            </div>
+            <!-- Row 2: Rotate (big) -->
+            <div class="control-row">
+                <button class="ctrl-btn rotate-btn" id="ctrl-rotate" aria-label="旋轉">↻</button>
+            </div>
+            <!-- Row 3: Left + Down + Right -->
+            <div class="control-row dpad-row">
+                <button class="ctrl-btn" id="ctrl-left" aria-label="左移">←</button>
+                <button class="ctrl-btn" id="ctrl-down" aria-label="軟降">⤓</button>
+                <button class="ctrl-btn" id="ctrl-right" aria-label="右移">→</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/sound.js"></script>
+    <script src="js/highscore.js"></script>
+    <script src="js/hold-piece.js"></script>
+    <script src="js/combo.js"></script>
+    <script>
+    (() => {
+        // ==================== CONSTANTS ====================
+        const COLS = 10;
+        const ROWS = 20;
+        const BLOCK_SIZE = 30;
+        const NEXT_BLOCK_SIZE = 24;
+        const EMPTY = 0;
+
+        // Piece definitions: each piece is an array of rotations, each rotation is a matrix
+        const PIECES = {
+            I: {
+                shape: [
+                    [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+                    [[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]],
+                    [[0,0,0,0],[0,0,0,0],[1,1,1,1],[0,0,0,0]],
+                    [[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]]
+                ],
+                color: '#00f5ff'
+            },
+            O: {
+                shape: [
+                    [[1,1],[1,1]],
+                    [[1,1],[1,1]],
+                    [[1,1],[1,1]],
+                    [[1,1],[1,1]]
+                ],
+                color: '#ffff00'
+            },
+            T: {
+                shape: [
+                    [[0,1,0],[1,1,1],[0,0,0]],
+                    [[0,1,0],[0,1,1],[0,1,0]],
+                    [[0,0,0],[1,1,1],[0,1,0]],
+                    [[0,1,0],[1,1,0],[0,1,0]]
+                ],
+                color: '#c44dff'
+            },
+            S: {
+                shape: [
+                    [[0,1,1],[1,1,0],[0,0,0]],
+                    [[0,1,0],[0,1,1],[0,0,1]],
+                    [[0,0,0],[0,1,1],[1,1,0]],
+                    [[1,0,0],[1,1,0],[0,1,0]]
+                ],
+                color: '#00ff87'
+            },
+            Z: {
+                shape: [
+                    [[1,1,0],[0,1,1],[0,0,0]],
+                    [[0,0,1],[0,1,1],[0,1,0]],
+                    [[0,0,0],[1,1,0],[0,1,1]],
+                    [[0,1,0],[1,1,0],[1,0,0]]
+                ],
+                color: '#ff4757'
+            },
+            J: {
+                shape: [
+                    [[1,0,0],[1,1,1],[0,0,0]],
+                    [[0,1,1],[0,1,0],[0,1,0]],
+                    [[0,0,0],[1,1,1],[0,0,1]],
+                    [[0,1,0],[0,1,0],[1,1,0]]
+                ],
+                color: '#4a90d9'
+            },
+            L: {
+                shape: [
+                    [[0,0,1],[1,1,1],[0,0,0]],
+                    [[0,1,0],[0,1,0],[0,1,1]],
+                    [[0,0,0],[1,1,1],[1,0,0]],
+                    [[1,1,0],[0,1,0],[0,1,0]]
+                ],
+                color: '#ff9f43'
+            }
+        };
+
+        const PIECE_NAMES = Object.keys(PIECES);
+
+        // Scoring: points for clearing 1-4 lines
+        const LINE_POINTS = [0, 100, 300, 500, 800];
+
+        // Speed per level (ms) - decreases as level increases
+        function getDropInterval(level) {
+            const speeds = [800, 720, 630, 550, 470, 380, 300, 220, 150, 100, 80, 70, 60, 50, 40];
+            return speeds[Math.min(level - 1, speeds.length - 1)];
+        }
+
+        // ==================== GAME STATE ====================
+        let board = [];
+        let currentPiece = null;
+        let nextPieceType = null;
+        let score = 0;
+        let level = 1;
+        let linesCleared = 0;
+        let gameState = 'idle'; // idle, playing, paused, gameover
+        let dropTimer = null;
+        let animationFrameId = null;
+
+        // ==================== CANVAS SETUP ====================
+        const canvas = document.getElementById('game-board');
+        const ctx = canvas.getContext('2d');
+        const nextCanvas = document.getElementById('next-piece-canvas');
+        const nextCtx = nextCanvas ? nextCanvas.getContext('2d') : null;
+        const holdCanvas = document.getElementById('hold-piece-canvas');
+        const holdCtx = holdCanvas ? holdCanvas.getContext('2d') : null;
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('start-btn');
+
+        // Mobile canvas references (used on screens <= 600px)
+        const nextCanvasMobile = document.getElementById('next-piece-canvas-mobile');
+        const nextCtxMobile = nextCanvasMobile ? nextCanvasMobile.getContext('2d') : null;
+        const holdCanvasMobile = document.getElementById('hold-piece-canvas-mobile');
+        const holdCtxMobile = holdCanvasMobile ? holdCanvasMobile.getContext('2d') : null;
+
+        // Flag to detect mobile (also updated on resize)
+        let isMobile = window.matchMedia('(max-width: 600px)').matches;
+
+        // ==================== RESPONSIVE CANVAS SIZING ====================
+        function resizeCanvas() {
+            const wasMobile = isMobile;
+            isMobile = window.matchMedia('(max-width: 600px)').matches;
+
+            // Show/hide desktop side-panel
+            const sidePanel = document.querySelector('.side-panel');
+            if (sidePanel) {
+                sidePanel.style.display = isMobile ? 'none' : 'flex';
+            }
+
+            // Show/hide mobile stats
+            const mobileStats = document.querySelector('.mobile-stats');
+            if (mobileStats) {
+                mobileStats.style.display = isMobile ? 'flex' : 'none';
+            }
+
+            // Show/hide mobile previews
+            const mobilePreviews = document.querySelector('.mobile-previews');
+            if (mobilePreviews) {
+                mobilePreviews.style.display = isMobile ? 'flex' : 'none';
+            }
+
+            // Show/hide mobile controls
+            const mobileControls = document.querySelector('.mobile-controls');
+            if (mobileControls) {
+                mobileControls.style.display = isMobile ? 'flex' : 'none';
+            }
+
+            // Resize game board canvas to fit screen
+            if (isMobile) {
+                // Mobile: maximize canvas, use full viewport minus controls
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                // Reserve space for bottom controls (~180px: 3 rows of buttons ~150px + gaps + padding)
+                const controlsHeight = 180;
+                const availWidth = Math.min(vw - 8, 360);
+                const availHeight = vh - controlsHeight;
+                // Calculate block size to fit
+                const blockW = Math.floor(availWidth / COLS);
+                const blockH = Math.floor(availHeight / ROWS);
+                const newBlockSize = Math.min(blockW, blockH, 30);
+                // Ensure minimum block size of 20 for readability
+                const finalBlockSize = Math.max(newBlockSize, 20);
+
+                canvas.width = COLS * finalBlockSize;
+                canvas.height = ROWS * finalBlockSize;
+                // Store for rendering
+                canvas.style.width = canvas.width + 'px';
+                canvas.style.height = canvas.height + 'px';
+            } else {
+                // Desktop: fixed 30x30 blocks, centered
+                canvas.width = COLS * BLOCK_SIZE;
+                canvas.height = ROWS * BLOCK_SIZE;
+                canvas.style.width = '';
+                canvas.style.height = '';
+            }
+
+            // Update block size constant for rendering
+            // (we use a dynamic blockSize based on current viewport)
+
+            // Re-render previews if they exist
+            if (nextPieceType !== null) {
+                drawNextPiece();
+            }
+            drawBoard();
+
+            // Redraw hold piece if hold is set (use module's redraw)
+            if (HoldModule.redrawHold) {
+                HoldModule.redrawHold();
+            }
+        }
+
+        // Get current dynamic block size for this viewport
+        function getBlockSize() {
+            if (isMobile) {
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                const controlsHeight = 180;
+                const availWidth = Math.min(vw - 8, 360);
+                const availHeight = Math.max(vh - controlsHeight, ROWS * 20);
+                const blockW = Math.floor(availWidth / COLS);
+                const blockH = Math.floor(availHeight / ROWS);
+                return Math.max(Math.min(blockW, blockH, 30), 20);
+            }
+            return BLOCK_SIZE;
+        }
+
+        // ==================== BOARD HELPERS ====================
+        function createBoard() {
+            return Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+        }
+
+        function getRandomPieceType() {
+            const idx = Math.floor(Math.random() * PIECE_NAMES.length);
+            return PIECE_NAMES[idx];
+        }
+
+        // 7-bag randomizer for fair piece distribution
+        let bag = [];
+        function getNextFromBag() {
+            if (bag.length === 0) {
+                bag = [...PIECE_NAMES].sort(() => Math.random() - 0.5);
+            }
+            return bag.pop();
+        }
+
+        // ==================== PIECE MANAGEMENT ====================
+        function createPiece(type, rotation = 0) {
+            const pieceDef = PIECES[type];
+            return {
+                type: type,
+                rotation: rotation,
+                matrix: pieceDef.shape[rotation],
+                color: pieceDef.color,
+                x: Math.floor((COLS - pieceDef.shape[rotation][0].length) / 2),
+                y: 0
+            };
+        }
+
+        function spawnPiece() {
+            if (!nextPieceType) {
+                nextPieceType = getNextFromBag();
+            }
+            currentPiece = createPiece(nextPieceType);
+            nextPieceType = getNextFromBag();
+            
+            // Check for game over - piece can't be placed
+            if (collides(currentPiece.matrix, currentPiece.x, currentPiece.y)) {
+                SoundModule.playGameOver();
+                HighScoreModule.saveScore(score, level);
+                gameState = 'gameover';
+                clearInterval(dropTimer);
+                dropTimer = null;
+                showOverlay(true);
+            }
+        }
+
+        function rotate(matrix) {
+            const N = matrix.length;
+            const rotated = Array.from({ length: N }, () => Array(N).fill(0));
+            for (let y = 0; y < N; y++) {
+                for (let x = 0; x < N; x++) {
+                    rotated[x][N - 1 - y] = matrix[y][x];
+                }
+            }
+            return rotated;
+        }
+
+        function tryRotate() {
+            if (!currentPiece || gameState !== 'playing') return;
+            
+            const newRotation = (currentPiece.rotation + 1) % 4;
+            const newMatrix = PIECES[currentPiece.type].shape[newRotation];
+            
+            // Wall kick: try shifting left/right to fit rotation
+            const kicks = [0, -1, 1, -2, 2];
+            for (const kick of kicks) {
+                if (!collides(newMatrix, currentPiece.x + kick, currentPiece.y)) {
+                    currentPiece.matrix = newMatrix;
+                    currentPiece.rotation = newRotation;
+                    currentPiece.x += kick;
+                    SoundModule.playRotate();
+                    return;
+                }
+            }
+        }
+
+        function collides(matrix, px, py) {
+            for (let y = 0; y < matrix.length; y++) {
+                for (let x = 0; x < matrix[y].length; x++) {
+                    if (matrix[y][x]) {
+                        const newX = px + x;
+                        const newY = py + y;
+                        if (newX < 0 || newX >= COLS || newY >= ROWS) return true;
+                        if (newY >= 0 && board[newY][newX] !== EMPTY) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function lockPiece() {
+            SoundModule.playLock();
+            for (let y = 0; y < currentPiece.matrix.length; y++) {
+                for (let x = 0; x < currentPiece.matrix[y].length; x++) {
+                    if (currentPiece.matrix[y][x]) {
+                        const boardY = currentPiece.y + y;
+                        const boardX = currentPiece.x + x;
+                        if (boardY >= 0 && boardY < ROWS) {
+                            board[boardY][boardX] = currentPiece.color;
+                        }
+                    }
+                }
+            }
+            
+            clearLines();
+            spawnPiece();
+            drawNextPiece();
+        }
+
+        function move(dx, dy) {
+            if (!currentPiece || gameState !== 'playing') return false;
+            const newX = currentPiece.x + dx;
+            const newY = currentPiece.y + dy;
+            if (!collides(currentPiece.matrix, newX, newY)) {
+                currentPiece.x = newX;
+                currentPiece.y = newY;
+                return true;
+            }
+            return false;
+        }
+
+        function hardDrop() {
+            if (!currentPiece || gameState !== 'playing') return;
+            SoundModule.playHardDrop();
+            let dropDistance = 0;
+            while (!collides(currentPiece.matrix, currentPiece.x, currentPiece.y + 1)) {
+                currentPiece.y++;
+                dropDistance++;
+            }
+            score += dropDistance * 2; // Bonus for hard drop
+            updateUI();
+            lockPiece();
+        }
+
+        function getGhostY() {
+            if (!currentPiece) return null;
+            let ghostY = currentPiece.y;
+            while (!collides(currentPiece.matrix, currentPiece.x, ghostY + 1)) {
+                ghostY++;
+            }
+            return ghostY;
+        }
+
+        // ==================== LINE CLEARING ====================
+        function clearLines() {
+            let clearedRows = [];
+            
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (board[y].every(cell => cell !== EMPTY)) {
+                    clearedRows.push(y);
+                }
+            }
+
+            if (clearedRows.length > 0) {
+                // Remove cleared rows from top to bottom
+                for (const row of clearedRows.sort((a, b) => a - b)) {
+                    board.splice(row, 1);
+                    board.unshift(Array(COLS).fill(EMPTY));
+                }
+
+                const count = clearedRows.length;
+                score += LINE_POINTS[count] * level;
+                linesCleared += count;
+
+                // Combo system
+                const { hasCombo, bonus } = ComboModule.processLineClear(count, level);
+                if (hasCombo) {
+                    score += bonus;
+                    SoundModule.playCombo(ComboModule.getComboCount());
+                    const comboEl = document.getElementById('combo-display');
+                    comboEl.textContent = `${ComboModule.getComboCount()} COMBO!`;
+                    setTimeout(() => { comboEl.textContent = ''; }, 1500);
+                }
+
+                // Line clear sound
+                SoundModule.playLineClear(count);
+                
+                // Level up every 10 lines
+                level = Math.floor(linesCleared / 10) + 1;
+                
+                // Update drop speed
+                if (dropTimer) {
+                    clearInterval(dropTimer);
+                    startDropTimer();
+                }
+
+                updateUI();
+            }
+        }
+
+        // ==================== RENDERING ====================
+        // Dynamic block size based on current viewport
+        // (BLOCK_SIZE is the desktop default)
+
+        function drawBlock(context, x, y, color, size) {
+            size = size || getBlockSize();
+            const padding = 1;
+            context.fillStyle = color;
+            context.fillRect(x * size + padding, y * size + padding, size - padding * 2, size - padding * 2);
+
+            // Highlight (top-left)
+            context.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            context.fillRect(x * size + padding, y * size + padding, size - padding * 2, 4);
+            context.fillRect(x * size + padding, y * size + padding, 4, size - padding * 2);
+
+            // Shadow (bottom-right)
+            context.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            context.fillRect(x * size + padding, (y + 1) * size - padding - 4, size - padding * 2, 4);
+            context.fillRect((x + 1) * size - padding - 4, y * size + padding, 4, size - padding * 2);
+        }
+
+        function drawBoard() {
+            // Clear canvas
+            ctx.fillStyle = '#1a1a3e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid lines
+            ctx.strokeStyle = 'rgba(74, 144, 217, 0.1)';
+            ctx.lineWidth = 0.5;
+            for (let x = 0; x <= COLS; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * BLOCK_SIZE, 0);
+                ctx.lineTo(x * BLOCK_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= ROWS; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * BLOCK_SIZE);
+                ctx.lineTo(canvas.width, y * BLOCK_SIZE);
+                ctx.stroke();
+            }
+
+            // Draw locked blocks
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (board[y][x] !== EMPTY) {
+                        drawBlock(ctx, x, y, board[y][x]);
+                    }
+                }
+            }
+
+            // Draw ghost piece
+            const ghostY = getGhostY();
+            if (ghostY !== null && currentPiece) {
+                ctx.globalAlpha = 0.2;
+                for (let y = 0; y < currentPiece.matrix.length; y++) {
+                    for (let x = 0; x < currentPiece.matrix[y].length; x++) {
+                        if (currentPiece.matrix[y][x]) {
+                            drawBlock(ctx, currentPiece.x + x, ghostY + y, currentPiece.color);
+                        }
+                    }
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Draw current piece
+            if (currentPiece) {
+                for (let y = 0; y < currentPiece.matrix.length; y++) {
+                    for (let x = 0; x < currentPiece.matrix[y].length; x++) {
+                        if (currentPiece.matrix[y][x]) {
+                            drawBlock(ctx, currentPiece.x + x, currentPiece.y + y, currentPiece.color);
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawNextPiece() {
+            // Desktop
+            if (nextCanvas && nextCtx) {
+                nextCtx.fillStyle = '#1a1a3e';
+                nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+
+                if (nextPieceType) {
+                    const pieceDef = PIECES[nextPieceType];
+                    const matrix = pieceDef.shape[0];
+                    const size = matrix.length;
+                    
+                    const offsetX = (nextCanvas.width - size * NEXT_BLOCK_SIZE) / 2 / NEXT_BLOCK_SIZE;
+                    const offsetY = (nextCanvas.height - size * NEXT_BLOCK_SIZE) / 2 / NEXT_BLOCK_SIZE;
+
+                    for (let y = 0; y < matrix.length; y++) {
+                        for (let x = 0; x < matrix[y].length; x++) {
+                            if (matrix[y][x]) {
+                                drawBlock(nextCtx, x + offsetX, y + offsetY, pieceDef.color, NEXT_BLOCK_SIZE);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Mobile — use actual canvas dimensions instead of hardcoded 120
+            if (nextCanvasMobile && nextCtxMobile) {
+                const mc = nextCanvasMobile;
+                if (!mc) return;
+                const mobileSize = mc.width;
+                nextCtxMobile.fillStyle = '#1a1a3e';
+                nextCtxMobile.fillRect(0, 0, mobileSize, mobileSize);
+
+                if (nextPieceType) {
+                    const pieceDef = PIECES[nextPieceType];
+                    const matrix = pieceDef.shape[0];
+                    const size = matrix.length;
+                    const mobileNextBlockSize = 16;
+                    
+                    const offsetX = (mobileSize - size * mobileNextBlockSize) / 2 / mobileNextBlockSize;
+                    const offsetY = (mobileSize - size * mobileNextBlockSize) / 2 / mobileNextBlockSize;
+
+                    for (let y = 0; y < matrix.length; y++) {
+                        for (let x = 0; x < matrix[y].length; x++) {
+                            if (matrix[y][x]) {
+                                drawBlock(nextCtxMobile, x + offsetX, y + offsetY, pieceDef.color, mobileNextBlockSize);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==================== GAME LOOP ====================
+        function startDropTimer() {
+            clearInterval(dropTimer);
+            dropTimer = setInterval(() => {
+                if (gameState === 'playing') {
+                    if (!move(0, 1)) {
+                        lockPiece();
+                    }
+                    updateUI();
+                }
+            }, getDropInterval(level));
+        }
+
+        function renderLoop() {
+            drawBoard();
+            animationFrameId = requestAnimationFrame(renderLoop);
+        }
+
+        // ==================== UI UPDATES ====================
+        function updateUI() {
+            document.getElementById('score').textContent = score.toLocaleString();
+            document.getElementById('level').textContent = level;
+            document.getElementById('lines').textContent = linesCleared;
+        }
+
+        function showOverlay(gameOver) {
+            overlay.classList.remove('hidden');
+            if (gameOver) {
+                overlay.innerHTML = `
+                    <h2>遊戲結束</h2>
+                    <div class="game-over-score">最終分數：${score.toLocaleString()}</div>
+                    <p>等級 ${level} · 清除 ${linesCleared} 行</p>
+                    ${HighScoreModule.getBestScore() >= score ? '<p style="color:#ff6b9d;">🏆 新紀錄！</p>' : ''}
+                    <div class="panel-box" style="margin-top:12px;max-width:300px;"><h3>最高分排行</h3>${HighScoreModule.getHighScoreHTML()}</div>
+                    <button class="btn" id="restart-btn">再玩一次</button>
+                `;
+                document.getElementById('restart-btn').addEventListener('click', startGame);
+            } else {
+                overlay.innerHTML = `
+                    <div class="title-text">俄羅斯方塊</div>
+                    <p>TETRIS</p>
+                    <p style="color: #aaa; margin-bottom: 20px;">按下開始遊戲按鈕或按 Enter 鍵</p>
+                    <button class="btn" id="start-btn-inline">開始遊戲</button>
+                `;
+                document.getElementById('start-btn-inline').addEventListener('click', startGame);
+            }
+        }
+
+        // ==================== GAME CONTROL ====================
+        function startGame() {
+            board = createBoard();
+            score = 0;
+            level = 1;
+            linesCleared = 0;
+            bag = [];
+            nextPieceType = null;
+            gameState = 'playing';
+            
+            overlay.classList.add('hidden');
+            ComboModule.reset();
+            HoldModule.reset();
+            updateUI();
+            spawnPiece();
+            drawNextPiece();
+
+            if (dropTimer) clearInterval(dropTimer);
+            startDropTimer();
+
+            if (!animationFrameId) renderLoop();
+        }
+
+        function togglePause() {
+            if (gameState === 'playing') {
+                gameState = 'paused';
+                overlay.classList.remove('hidden');
+                overlay.innerHTML = `
+                    <h2>暫停中</h2>
+                    <p>按 P 或點擊按鈕繼續</p>
+                    <button class="btn" id="resume-btn">繼續遊戲</button>
+                `;
+                document.getElementById('resume-btn').addEventListener('click', () => {
+                    gameState = 'playing';
+                    overlay.classList.add('hidden');
+                });
+            } else if (gameState === 'paused') {
+                gameState = 'playing';
+                overlay.classList.add('hidden');
+            }
+        }
+
+        // ==================== INPUT HANDLING ====================
+        document.addEventListener('keydown', (e) => {
+            // Prevent default for game keys
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.key)) {
+                e.preventDefault();
+            }
+
+            switch (e.key) {
+                case 'Enter':
+                    if (gameState === 'idle' || gameState === 'gameover') {
+                        startGame();
+                    }
+                    break;
+                
+                case 'p':
+                case 'P':
+                    if (gameState === 'playing' || gameState === 'paused') {
+                        togglePause();
+                    }
+                    break;
+
+                case 'c':
+        case 'C':
+            if (gameState === 'playing') HoldModule.tryHold();
+            break;
+
+        case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (gameState === 'playing') move(-1, 0);
+                    break;
+
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (gameState === 'playing') move(1, 0);
+                    break;
+
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (gameState === 'playing' && move(0, 1)) {
+                        score += 1; // Soft drop bonus
+                        updateUI();
+                    }
+                    break;
+
+                case 'ArrowUp':
+                case 'x':
+                case 'X':
+                    if (gameState === 'playing') tryRotate();
+                    break;
+
+                case ' ':
+                    if (gameState === 'playing') hardDrop();
+                    break;
+            }
+        });
+
+        // ==================== MOBILE CONTROL BUTTONS ====================
+        // Debounce helper: prevent spamming too fast
+        let lastActionTime = 0;
+        const ACTION_COOLDOWN = 80; // ms between actions
+
+        function mobileAction(actionFn) {
+            const now = Date.now();
+            if (now - lastActionTime < ACTION_COOLDOWN) return;
+            lastActionTime = now;
+            actionFn();
+        }
+
+        // Left button
+        const ctrlLeft = document.getElementById('ctrl-left');
+        if (ctrlLeft) {
+            // Use touchstart for instant response (no delay on mobile)
+            ctrlLeft.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (gameState === 'playing') mobileAction(() => move(-1, 0));
+            });
+            ctrlLeft.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                if (gameState === 'playing') mobileAction(() => move(-1, 0));
+            });
+        }
+
+        // Right button
+        const ctrlRight = document.getElementById('ctrl-right');
+        if (ctrlRight) {
+            ctrlRight.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (gameState === 'playing') mobileAction(() => move(1, 0));
+            });
+            ctrlRight.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                if (gameState === 'playing') mobileAction(() => move(1, 0));
+            });
+        }
+
+        // Down button (soft drop)
+        const ctrlDown = document.getElementById('ctrl-down');
+        if (ctrlDown) {
+            // Repeat when held down
+            let downInterval = null;
+            const startDown = () => {
+                if (gameState === 'playing') {
+                    mobileAction(() => {
+                        if (move(0, 1)) {
+                            score += 1;
+                            updateUI();
+                        }
+                    });
+                    // Rapid repeat while held
+                    downInterval = setInterval(() => {
+                        if (gameState === 'playing') {
+                            if (move(0, 1)) {
+                                score += 1;
+                                updateUI();
+                            }
+                        }
+                    }, 50);
+                }
+            };
+            const stopDown = () => {
+                clearInterval(downInterval);
+                downInterval = null;
+            };
+            ctrlDown.addEventListener('touchstart', (e) => { e.preventDefault(); startDown(); });
+            ctrlDown.addEventListener('touchend', (e) => { e.preventDefault(); stopDown(); });
+            ctrlDown.addEventListener('touchcancel', (e) => { stopDown(); });
+            ctrlDown.addEventListener('mousedown', (e) => { e.preventDefault(); startDown(); });
+            ctrlDown.addEventListener('mouseup', (e) => { e.preventDefault(); stopDown(); });
+            ctrlDown.addEventListener('mouseleave', (e) => { stopDown(); });
+        }
+
+        // Rotate button
+        const ctrlRotate = document.getElementById('ctrl-rotate');
+        if (ctrlRotate) {
+            const doRotate = () => {
+                mobileAction(() => tryRotate());
+            };
+            ctrlRotate.addEventListener('touchstart', (e) => { e.preventDefault(); doRotate(); });
+            ctrlRotate.addEventListener('mousedown', (e) => { e.preventDefault(); doRotate(); });
+        }
+
+        // Hard drop button
+        const ctrlDrop = document.getElementById('ctrl-drop');
+        if (ctrlDrop) {
+            const doDrop = () => {
+                mobileAction(() => hardDrop());
+            };
+            ctrlDrop.addEventListener('touchstart', (e) => { e.preventDefault(); doDrop(); });
+            ctrlDrop.addEventListener('mousedown', (e) => { e.preventDefault(); doDrop(); });
+        }
+
+        // Hold button
+        const ctrlHold = document.getElementById('ctrl-hold');
+        if (ctrlHold) {
+            const doHold = () => {
+                mobileAction(() => {
+                    if (gameState === 'playing') HoldModule.tryHold();
+                });
+            };
+            ctrlHold.addEventListener('touchstart', (e) => { e.preventDefault(); doHold(); });
+            ctrlHold.addEventListener('mousedown', (e) => { e.preventDefault(); doHold(); });
+        }
+
+        // Pause button
+        const ctrlPause = document.getElementById('ctrl-pause');
+        if (ctrlPause) {
+            const doPause = () => {
+                mobileAction(() => {
+                    if (gameState === 'playing' || gameState === 'paused') togglePause();
+                });
+            };
+            ctrlPause.addEventListener('touchstart', (e) => { e.preventDefault(); doPause(); });
+            ctrlPause.addEventListener('mousedown', (e) => { e.preventDefault(); doPause(); });
+        }
+
+        // ==================== TOUCH SWIPE ON GAME BOARD ====================
+        // Swipe on the canvas still works for quick moves
+        let touchStartX = 0, touchStartY = 0;
+        let touchStartTime = 0;
+        let touchMoved = false;
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            touchStartTime = Date.now();
+            touchMoved = false;
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            // Mark as moved so we don't treat as tap
+            if (gameState === 'playing') {
+                const dx = e.touches[0].clientX - touchStartX;
+                const dy = e.touches[0].clientY - touchStartY;
+                if (Math.abs(dx) > 15 || Math.abs(dy) > 15) {
+                    touchMoved = true;
+                }
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (gameState !== 'playing') return;
+
+            const deltaX = e.changedTouches[0].clientX - touchStartX;
+            const deltaY = e.changedTouches[0].clientY - touchStartY;
+            const absDx = Math.abs(deltaX);
+            const absDy = Math.abs(deltaY);
+            const elapsed = Date.now() - touchStartTime;
+
+            if (!touchMoved && elapsed < 300) {
+                // Tap = rotate
+                tryRotate();
+            } else if (absDx > 15 || absDy > 15) {
+                if (absDx > absDy) {
+                    // Horizontal swipe: move left/right
+                    move(deltaX > 0 ? 1 : -1, 0);
+                } else {
+                    // Vertical swipe
+                    if (Math.abs(deltaY) > 50) {
+                        hardDrop();
+                    } else {
+                        move(0, deltaY > 0 ? 1 : 0);
+                    }
+                }
+            }
+        }, { passive: false });
+
+        // ==================== INITIALIZATION ====================
+        startBtn.addEventListener('click', startGame);
+
+        // Expose for external modules (hold-piece.js, etc.)
+        window.__tetris = {
+            PIECES,
+            createPiece,
+            spawnPiece,
+            collides,
+            drawBlock,
+            drawNextPiece,
+            getNextFromBag,
+            gameState: () => gameState,
+            currentPiece: () => currentPiece,
+            nextPieceType: () => nextPieceType,
+            getBlockSize
+        };
+
+        // Handle window resize (orientation change on mobile)
+        window.addEventListener('resize', resizeCanvas);
+        // Initial responsive sizing
+        resizeCanvas();
+
+        // Initial render
+        drawBoard();
+        drawNextPiece();
+    })();
+    </script>
+</body>
+</html>
