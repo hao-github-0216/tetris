@@ -1322,9 +1322,52 @@
 
         // ==================== TOUCH SWIPE ON GAME BOARD ====================
         // Swipe on the canvas still works for quick moves
+        // Long-press on the game board triggers rapid drop mode (300ms hold)
         let touchStartX = 0, touchStartY = 0;
         let touchStartTime = 0;
         let touchMoved = false;
+
+        // Rapid drop state
+        let rapidDropTriggerTimer = null;
+        let rapidDropInterval = null;
+        let rapidDropActive = false;
+        const RAPID_DROP_TRIGGER_MS = 300;
+        const RAPID_DROP_INTERVAL_MS = 50;
+
+        function startRapidDrop() {
+            if (rapidDropActive) return;
+            rapidDropActive = true;
+            let cellCount = 0;
+            rapidDropInterval = setInterval(() => {
+                if (gameState !== 'playing') {
+                    stopRapidDrop();
+                    return;
+                }
+                if (move(0, 1)) {
+                    score += 2; // Same as hard drop per cell
+                    updateUI();
+                    cellCount++;
+                    SoundModule.playRapidDrop();
+                } else {
+                    // Can't move down anymore — lock the piece
+                    lockPiece();
+                    stopRapidDrop();
+                    return;
+                }
+            }, RAPID_DROP_INTERVAL_MS);
+        }
+
+        function stopRapidDrop() {
+            rapidDropActive = false;
+            if (rapidDropTriggerTimer) {
+                clearTimeout(rapidDropTriggerTimer);
+                rapidDropTriggerTimer = null;
+            }
+            if (rapidDropInterval) {
+                clearInterval(rapidDropInterval);
+                rapidDropInterval = null;
+            }
+        }
 
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -1332,21 +1375,39 @@
             touchStartY = e.touches[0].clientY;
             touchStartTime = Date.now();
             touchMoved = false;
+
+            // Start 300ms trigger timer for rapid drop
+            if (gameState === 'playing') {
+                rapidDropTriggerTimer = setTimeout(() => {
+                    if (gameState === 'playing') {
+                        // Trigger rapid drop if not moved much
+                        if (!touchMoved) {
+                            startRapidDrop();
+                        }
+                    }
+                }, RAPID_DROP_TRIGGER_MS);
+            }
         }, { passive: false });
 
         canvas.addEventListener('touchmove', (e) => {
             // Mark as moved so we don't treat as tap
+            // Also cancel rapid drop trigger if swiping
             if (gameState === 'playing') {
                 const dx = e.touches[0].clientX - touchStartX;
                 const dy = e.touches[0].clientY - touchStartY;
                 if (Math.abs(dx) > 15 || Math.abs(dy) > 15) {
                     touchMoved = true;
+                    // Cancel the rapid drop trigger if swiping
+                    stopRapidDrop();
                 }
             }
         }, { passive: false });
 
         canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
+            // Always stop rapid drop on release
+            stopRapidDrop();
+
             if (gameState !== 'playing') return;
 
             const deltaX = e.changedTouches[0].clientX - touchStartX;
@@ -1373,6 +1434,29 @@
             }
         }, { passive: false });
 
+        // Desktop mouse: also support long-press rapid drop on game board
+        canvas.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            if (gameState !== 'playing') return;
+
+            // Start 300ms trigger for rapid drop
+            rapidDropTriggerTimer = setTimeout(() => {
+                if (gameState === 'playing') {
+                    startRapidDrop();
+                }
+            }, RAPID_DROP_TRIGGER_MS);
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            stopRapidDrop();
+        });
+
+        canvas.addEventListener('mouseleave', (e) => {
+            e.preventDefault();
+            stopRapidDrop();
+        });
+
         // ==================== INITIALIZATION ====================
         startBtn.addEventListener('click', startGame);
 
@@ -1385,10 +1469,13 @@
             drawBlock,
             drawNextPiece,
             getNextFromBag,
-            gameState: () => gameState,
-            currentPiece: () => currentPiece,
-            nextPieceType: () => nextPieceType,
-            getBlockSize
+            getBlockSize,
+            get gameState() { return gameState; },
+            set gameState(v) { gameState = v; },
+            get currentPiece() { return currentPiece; },
+            set currentPiece(v) { currentPiece = v; },
+            get nextPieceType() { return nextPieceType; },
+            set nextPieceType(v) { nextPieceType = v; }
         };
 
         // Handle window resize (orientation change on mobile)

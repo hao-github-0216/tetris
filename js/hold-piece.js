@@ -1,11 +1,14 @@
 /**
  * Hold 功能模組
  * 按 C 鍵將當前方塊存入 Hold 區，換出已 Hold 的方塊
- * 每個回合只能使用一次 Hold
+ *
+ * 正確邏輯（現代俄羅斯方塊）：
+ * 1. 第一次按保留：當前下落方塊 → 保留區，Next 方塊 → 下落方塊，生成新的 Next
+ * 2. 之後按保留：當前下落方塊 ↔ 保留區互相交換，生成新的 Next
+ * 3. 只要遊戲進行中，可以無限次按保留按鈕
  */
 const HoldModule = (() => {
     let heldPiece = null;
-    let hasHeld = false;
 
     function getHoldCanvas() {
         const isMobile = window.matchMedia('(max-width: 600px)').matches;
@@ -51,20 +54,25 @@ const HoldModule = (() => {
      * @returns {boolean} 是否成功執行
      */
     function tryHold() {
-        if (!window.__tetris.currentPiece || hasHeld || window.__tetris.gameState !== 'playing') return false;
+        const cp = window.__tetris.currentPiece;
+        const gs = window.__tetris.gameState;
+        // 只有在遊戲進行中且有當前方塊時才能保留
+        if (!cp || gs !== 'playing') return false;
 
-        const currentType = window.__tetris.currentPiece.type;
+        const currentType = cp.type;
 
         if (heldPiece) {
-            // Swap: put current into hold, take held out
+            // 交換模式：已 Hold 過一次，現在交換回 Holder 方塊
+            // 1. 當前方塊存入保留區
+            // 2. 保留區的方塊變成新的下落方塊
             window.__tetris.currentPiece = window.__tetris.createPiece(heldPiece);
             heldPiece = currentType;
 
-            drawHoldPiece(getHoldCanvas().getContext('2d'), getHoldCanvas(), heldPiece);
+            const hctx = getHoldCanvas().getContext('2d');
+            drawHoldPiece(hctx, getHoldCanvas(), heldPiece);
         } else {
-            // First hold: save current piece and spawn a new one
+            // 第一次保留：將當前方塊存入保留區，換出 Next 方塊
             heldPiece = currentType;
-            hasHeld = true;
             window.__tetris.spawnPiece();
 
             const hctx = getHoldCanvas().getContext('2d');
@@ -77,7 +85,6 @@ const HoldModule = (() => {
 
     function reset() {
         heldPiece = null;
-        hasHeld = false;
     }
 
     function getHeldType() { return heldPiece; }

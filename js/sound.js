@@ -60,5 +60,11 @@ const SoundModule = (() => {
 
     function playHoldSwap() { init(); playTone(800, 0.08, 'sine', 0.1); setTimeout(() => playTone(900, 0.08, 'sine', 0.1), 60); }
 
-    return { playLock, playMove, playRotate, playHardDrop, playLineClear, playGameOver, playCombo, playHoldSwap };
+    function playRapidDrop() {
+        init();
+        // Short rapid thud for each cell falling during rapid drop
+        playTone(150, 0.06, 'square', 0.1);
+    }
+
+    return { playLock, playMove, playRotate, playHardDrop, playLineClear, playGameOver, playCombo, playHoldSwap, playRapidDrop };
 })();
