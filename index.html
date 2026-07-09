@@ -163,6 +163,16 @@
             transform: scale(1.05);
         }
 
+        .overlay-logo {
+            display: block;
+        }
+
+        .overlay-logo svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 12px rgba(74, 144, 217, 0.5));
+        }
+
         .title-text {
             font-size: 48px;
             background: linear-gradient(135deg, #ff6b9d, #c44dff, #4a90d9, #7fdbca);
@@ -428,6 +438,18 @@
             100% { background: transparent; }
         }
     </style>
+
+    <!-- Home screen icons for mobile -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/logo-180.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="assets/logo-152.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="assets/logo-167.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/logo-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="assets/logo-512.png">
+    <meta name="theme-color" content="#0a0a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
     <div class="game-container">
@@ -454,6 +476,18 @@
         <div class="board-wrapper">
             <canvas id="game-board" width="300" height="600"></canvas>
             <div id="overlay">
+                <div class="overlay-logo" id="overlay-logo" style='width:80px;height:80px;margin:0 auto 12px;'>
+                    <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="4" y="4" width="120" height="120" rx="28" fill="#0a0a2e" stroke="#4a90d9" stroke-width="3"/>
+                        <rect x="28" y="16" width="28" height="28" rx="4" fill="#00f5ff"/>
+                        <rect x="60" y="16" width="28" height="28" rx="4" fill="#c44dff"/>
+                        <rect x="92" y="16" width="28" height="28" rx="4" fill="#ff4757"/>
+                        <rect x="28" y="48" width="28" height="28" rx="4" fill="#7fdbca"/>
+                        <rect x="60" y="48" width="28" height="28" rx="4" fill="#ffd700"/>
+                        <rect x="92" y="48" width="28" height="28" rx="4" fill="#ff6b9d"/>
+                        <rect x="60" y="80" width="28" height="28" rx="4" fill="#00f5ff"/>
+                    </svg>
+                </div>
                 <div class="title-text">俄羅斯方塊</div>
                 <p>TETRIS</p>
                 <button class="btn" id="start-btn">開始遊戲</button>
@@ -1081,6 +1115,18 @@
             overlay.classList.remove('hidden');
             if (gameOver) {
                 overlay.innerHTML = `
+                    <div class="overlay-logo" style='width:60px;height:60px;margin:0 auto 8px;'>
+                        <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="4" y="4" width="120" height="120" rx="28" fill="#0a0a2e" stroke="#4a90d9" stroke-width="3"/>
+                            <rect x="28" y="16" width="28" height="28" rx="4" fill="#00f5ff"/>
+                            <rect x="60" y="16" width="28" height="28" rx="4" fill="#c44dff"/>
+                            <rect x="92" y="16" width="28" height="28" rx="4" fill="#ff4757"/>
+                            <rect x="28" y="48" width="28" height="28" rx="4" fill="#7fdbca"/>
+                            <rect x="60" y="48" width="28" height="28" rx="4" fill="#ffd700"/>
+                            <rect x="92" y="48" width="28" height="28" rx="4" fill="#ff6b9d"/>
+                            <rect x="60" y="80" width="28" height="28" rx="4" fill="#00f5ff"/>
+                        </svg>
+                    </div>
                     <h2>遊戲結束</h2>
                     <div class="game-over-score">最終分數：${score.toLocaleString()}</div>
                     <p>等級 ${level} · 清除 ${linesCleared} 行</p>
@@ -1091,6 +1137,18 @@
                 document.getElementById('restart-btn').addEventListener('click', startGame);
             } else {
                 overlay.innerHTML = `
+                    <div class="overlay-logo" style='width:60px;height:60px;margin:0 auto 8px;'>
+                        <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="4" y="4" width="120" height="120" rx="28" fill="#0a0a2e" stroke="#4a90d9" stroke-width="3"/>
+                            <rect x="28" y="16" width="28" height="28" rx="4" fill="#00f5ff"/>
+                            <rect x="60" y="16" width="28" height="28" rx="4" fill="#c44dff"/>
+                            <rect x="92" y="16" width="28" height="28" rx="4" fill="#ff4757"/>
+                            <rect x="28" y="48" width="28" height="28" rx="4" fill="#7fdbca"/>
+                            <rect x="60" y="48" width="28" height="28" rx="4" fill="#ffd700"/>
+                            <rect x="92" y="48" width="28" height="28" rx="4" fill="#ff6b9d"/>
+                            <rect x="60" y="80" width="28" height="28" rx="4" fill="#00f5ff"/>
+                        </svg>
+                    </div>
                     <div class="title-text">俄羅斯方塊</div>
                     <p>TETRIS</p>
                     <p style="color: #aaa; margin-bottom: 20px;">按下開始遊戲按鈕或按 Enter 鍵</p>
