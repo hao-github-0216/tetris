@@ -289,6 +289,13 @@
                 padding: 4px 4px 8px 4px;
             }
 
+            /* Mobile board wrapper — center and fill */
+            .board-wrapper {
+                width: 100%;
+                display: flex;
+                justify-content: center;
+            }
+
             /* Ensure full mobile layout is visible */
             .side-panel {
                 display: none; /* hide the desktop side-panel */
@@ -333,6 +340,7 @@
                 width: 100%;
                 max-width: 360px;
                 padding: 0 8px;
+                flex-shrink: 0;
             }
 
             .mobile-previews .mini-preview {
@@ -649,10 +657,10 @@
                 const bodyStyle = getComputedStyle(document.body);
                 const safeTop = parseFloat(bodyStyle.paddingTop) || 0;
                 const safeBottom = parseFloat(bodyStyle.paddingBottom) || 0;
-                // Reserve space for: info bar ~20px, previews ~60px, controls ~160px
+                // Reserve space for: info bar ~20px, previews ~60px, buttons ~36px
                 const infoBarHeight = 20;
                 const previewsHeight = 60;
-                const controlsHeight = 160;
+                const controlsHeight = 36;
                 const totalReserved = infoBarHeight + previewsHeight + controlsHeight;
                 const availWidth = Math.min(vw - 16, 360);
                 const availHeight = Math.max(vh - totalReserved - safeTop - safeBottom, ROWS * 20);
@@ -701,7 +709,7 @@
                 const safeBottom = parseFloat(bodyStyle.paddingBottom) || 0;
                 const infoBarHeight = 20;
                 const previewsHeight = 60;
-                const controlsHeight = 160;
+                const controlsHeight = 36;
                 const totalReserved = infoBarHeight + previewsHeight + controlsHeight;
                 const availWidth = Math.min(vw - 16, 360);
                 const availHeight = Math.max(vh - totalReserved - safeTop - safeBottom, ROWS * 20);
@@ -932,19 +940,20 @@
             ctx.fillStyle = '#1a1a3e';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw grid lines
+            // Draw grid lines (use dynamic block size for mobile)
             ctx.strokeStyle = 'rgba(74, 144, 217, 0.1)';
             ctx.lineWidth = 0.5;
+            const gs = getBlockSize();
             for (let x = 0; x <= COLS; x++) {
                 ctx.beginPath();
-                ctx.moveTo(x * BLOCK_SIZE, 0);
-                ctx.lineTo(x * BLOCK_SIZE, canvas.height);
+                ctx.moveTo(x * gs, 0);
+                ctx.lineTo(x * gs, canvas.height);
                 ctx.stroke();
             }
             for (let y = 0; y <= ROWS; y++) {
                 ctx.beginPath();
-                ctx.moveTo(0, y * BLOCK_SIZE);
-                ctx.lineTo(canvas.width, y * BLOCK_SIZE);
+                ctx.moveTo(0, y * gs);
+                ctx.lineTo(canvas.width, y * gs);
                 ctx.stroke();
             }
 
@@ -1115,8 +1124,8 @@
 
         // ==================== ACTION BUTTONS ====================
         function updateActionButtons() {
-            const hasPiece = HoldModule.hasPiece;
-            btnHold.disabled = gameState !== 'playing' || !hasPiece;
+            // Hold button: always enabled during gameplay (no keyboard 'C' on mobile)
+            btnHold.disabled = gameState !== 'playing';
             btnPause.disabled = gameState === 'idle' || gameState === 'gameover';
             btnRestart.disabled = gameState === 'idle';
 
@@ -1130,8 +1139,9 @@
 
         btnHold.addEventListener('click', () => {
             if (gameState === 'playing') {
-                HoldModule.tryHold();
-                updateActionButtons();
+                if (HoldModule.tryHold()) {
+                    updateActionButtons();
+                }
             }
         });
 
