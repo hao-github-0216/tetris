@@ -198,9 +198,6 @@
         }
 
         /* === MOBILE LAYOUT === */
-        .mobile-controls {
-            display: none; /* hidden on desktop */
-        }
 
         .mobile-stats {
             display: none; /* hidden on desktop */
@@ -251,10 +248,6 @@
             }
 
             /* Ensure full mobile layout is visible */
-            .mobile-controls {
-                padding-bottom: 4px;
-            }
-
             .side-panel {
                 display: none; /* hide the desktop side-panel */
             }
@@ -335,117 +328,6 @@
             }
 
             /* Control pad — compact */
-            .mobile-controls {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 8px;
-                width: 100%;
-                max-width: 360px;
-                padding: 4px 0;
-            }
-
-            .control-row {
-                display: flex;
-                justify-content: center;
-                gap: 8px;
-                width: 100%;
-            }
-
-            /* Base button style */
-            .ctrl-btn {
-                background: rgba(74, 144, 217, 0.3);
-                border: 2px solid #4a90d9;
-                border-radius: 12px;
-                color: #fff;
-                font-size: 20px;
-                font-weight: bold;
-                padding: 12px 16px;
-                min-width: 52px;
-                min-height: 50px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                transition: background 0.1s, transform 0.1s;
-                -webkit-tap-highlight-color: transparent;
-                touch-action: manipulation;
-            }
-
-            .ctrl-btn:active {
-                background: rgba(74, 144, 217, 0.7);
-                transform: scale(0.95);
-                box-shadow: 0 0 15px rgba(74, 144, 217, 0.5);
-            }
-
-            /* Hold button (special) */
-            .ctrl-btn.hold-btn {
-                background: rgba(196, 77, 255, 0.3);
-                border-color: #c44dff;
-                font-size: 12px;
-            }
-
-            .ctrl-btn.hold-btn:active {
-                background: rgba(196, 77, 255, 0.7);
-                box-shadow: 0 0 15px rgba(196, 77, 255, 0.5);
-            }
-
-            /* Action buttons (right side) */
-            .ctrl-btn.action-btn {
-                background: rgba(255, 107, 157, 0.3);
-                border-color: #ff6b9d;
-                font-size: 14px;
-            }
-
-            .ctrl-btn.action-btn:active {
-                background: rgba(255, 107, 157, 0.7);
-                box-shadow: 0 0 15px rgba(255, 107, 157, 0.5);
-            }
-
-            /* Rotate button - larger, more accessible */
-            .ctrl-btn.rotate-btn {
-                background: rgba(0, 245, 255, 0.3);
-                border-color: #00f5ff;
-                font-size: 22px;
-                min-width: 64px;
-                min-height: 56px;
-            }
-
-            .ctrl-btn.rotate-btn:active {
-                background: rgba(0, 245, 255, 0.7);
-                box-shadow: 0 0 15px rgba(0, 245, 255, 0.5);
-            }
-
-            /* Hard drop button */
-            .ctrl-btn.drop-btn {
-                background: rgba(255, 71, 87, 0.3);
-                border-color: #ff4757;
-                font-size: 16px;
-            }
-
-            .ctrl-btn.drop-btn:active {
-                background: rgba(255, 71, 87, 0.7);
-                box-shadow: 0 0 15px rgba(255, 71, 87, 0.5);
-            }
-
-            /* Center pad layout */
-            .control-row.dpad-row {
-                gap: 10px;
-            }
-
-            .control-row.dpad-row .ctrl-btn {
-                min-width: 64px;
-                min-height: 56px;
-                font-size: 22px;
-            }
-
-            /* Hold + Pause row */
-            .control-row.option-row .ctrl-btn {
-                min-width: 96px;
-                font-size: 12px;
-                letter-spacing: 0.5px;
-            }
-        }
 
         /* Line clear animation */
         @keyframes lineClear {
@@ -546,26 +428,6 @@
             </div>
         </div>
 
-        <!-- Mobile control pad (hidden on desktop) -->
-        <div class="mobile-controls">
-            <!-- Row 1: Hold + Pause + Hard Drop -->
-            <div class="control-row option-row">
-                <button class="ctrl-btn hold-btn" id="ctrl-hold" aria-label="保留">保留</button>
-                <button class="ctrl-btn" id="ctrl-pause" aria-label="暫停">暫停</button>
-                <button class="ctrl-btn drop-btn" id="ctrl-drop" aria-label="硬降">硬降 ⤓</button>
-                <button class="ctrl-btn" id="ctrl-restart" aria-label="重新開始">重新開始</button>
-            </div>
-            <!-- Row 2: Rotate (big) -->
-            <div class="control-row">
-                <button class="ctrl-btn rotate-btn" id="ctrl-rotate" aria-label="旋轉">↻</button>
-            </div>
-            <!-- Row 3: Left + Down + Right -->
-            <div class="control-row dpad-row">
-                <button class="ctrl-btn" id="ctrl-left" aria-label="左移">←</button>
-                <button class="ctrl-btn" id="ctrl-down" aria-label="軟降">⤓</button>
-                <button class="ctrl-btn" id="ctrl-right" aria-label="右移">→</button>
-            </div>
-        </div>
     </div>
 
     <script src="js/sound.js"></script>
@@ -713,9 +575,6 @@
             }
 
             // Show/hide mobile controls
-            const mobileControls = document.querySelector('.mobile-controls');
-            if (mobileControls) {
-                mobileControls.style.display = isMobile ? 'flex' : 'none';
             }
 
             // Resize game board canvas to fit screen
@@ -1294,142 +1153,6 @@
             }
         });
 
-        // ==================== MOBILE CONTROL BUTTONS ====================
-        // Debounce helper: prevent spamming too fast
-        let lastActionTime = 0;
-        const ACTION_COOLDOWN = 80; // ms between actions
-
-        function mobileAction(actionFn) {
-            const now = Date.now();
-            if (now - lastActionTime < ACTION_COOLDOWN) return;
-            lastActionTime = now;
-            actionFn();
-        }
-
-        // Left button
-        const ctrlLeft = document.getElementById('ctrl-left');
-        if (ctrlLeft) {
-            // Use touchstart for instant response (no delay on mobile)
-            ctrlLeft.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (gameState === 'playing') mobileAction(() => move(-1, 0));
-            });
-            ctrlLeft.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                if (gameState === 'playing') mobileAction(() => move(-1, 0));
-            });
-        }
-
-        // Right button
-        const ctrlRight = document.getElementById('ctrl-right');
-        if (ctrlRight) {
-            ctrlRight.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (gameState === 'playing') mobileAction(() => move(1, 0));
-            });
-            ctrlRight.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                if (gameState === 'playing') mobileAction(() => move(1, 0));
-            });
-        }
-
-        // Down button (soft drop)
-        const ctrlDown = document.getElementById('ctrl-down');
-        if (ctrlDown) {
-            // Repeat when held down
-            let downInterval = null;
-            const startDown = () => {
-                if (gameState === 'playing') {
-                    mobileAction(() => {
-                        if (move(0, 1)) {
-                            score += 1;
-                            updateUI();
-                        }
-                    });
-                    // Rapid repeat while held
-                    downInterval = setInterval(() => {
-                        if (gameState === 'playing') {
-                            if (move(0, 1)) {
-                                score += 1;
-                                updateUI();
-                            }
-                        }
-                    }, 50);
-                }
-            };
-            const stopDown = () => {
-                clearInterval(downInterval);
-                downInterval = null;
-            };
-            ctrlDown.addEventListener('touchstart', (e) => { e.preventDefault(); startDown(); });
-            ctrlDown.addEventListener('touchend', (e) => { e.preventDefault(); stopDown(); });
-            ctrlDown.addEventListener('touchcancel', (e) => { stopDown(); });
-            ctrlDown.addEventListener('mousedown', (e) => { e.preventDefault(); startDown(); });
-            ctrlDown.addEventListener('mouseup', (e) => { e.preventDefault(); stopDown(); });
-            ctrlDown.addEventListener('mouseleave', (e) => { stopDown(); });
-        }
-
-        // Rotate button
-        const ctrlRotate = document.getElementById('ctrl-rotate');
-        if (ctrlRotate) {
-            const doRotate = () => {
-                mobileAction(() => tryRotate());
-            };
-            ctrlRotate.addEventListener('touchstart', (e) => { e.preventDefault(); doRotate(); });
-            ctrlRotate.addEventListener('mousedown', (e) => { e.preventDefault(); doRotate(); });
-        }
-
-        // Hard drop button
-        const ctrlDrop = document.getElementById('ctrl-drop');
-        if (ctrlDrop) {
-            const doDrop = () => {
-                mobileAction(() => hardDrop());
-            };
-            ctrlDrop.addEventListener('touchstart', (e) => { e.preventDefault(); doDrop(); });
-            ctrlDrop.addEventListener('mousedown', (e) => { e.preventDefault(); doDrop(); });
-        }
-
-        // Hold button
-        const ctrlHold = document.getElementById('ctrl-hold');
-        if (ctrlHold) {
-            const doHold = () => {
-                mobileAction(() => {
-                    if (gameState === 'playing') HoldModule.tryHold();
-                });
-            };
-            ctrlHold.addEventListener('touchstart', (e) => { e.preventDefault(); doHold(); });
-            ctrlHold.addEventListener('mousedown', (e) => { e.preventDefault(); doHold(); });
-        }
-
-        // Pause button
-        const ctrlPause = document.getElementById('ctrl-pause');
-        if (ctrlPause) {
-            const doPause = () => {
-                mobileAction(() => {
-                    if (gameState === 'playing' || gameState === 'paused') togglePause();
-                });
-            };
-            ctrlPause.addEventListener('touchstart', (e) => { e.preventDefault(); doPause(); });
-            ctrlPause.addEventListener('mousedown', (e) => { e.preventDefault(), doPause(); });
-        }
-
-        // Restart button
-        const ctrlRestart = document.getElementById('ctrl-restart');
-        if (ctrlRestart) {
-            const doRestart = () => {
-                mobileAction(() => {
-                    if (gameState === 'playing' || gameState === 'paused') {
-                        SoundModule.playRestart();
-                        startGame();
-                    }
-                });
-            };
-            ctrlRestart.addEventListener('touchstart', (e) => { e.preventDefault(); doRestart(); });
-            ctrlRestart.addEventListener('mousedown', (e) => { e.preventDefault(); doRestart(); });
-        }
-
-        // ==================== TOUCH SWIPE ON GAME BOARD ====================
-        // Swipe on the canvas still works for quick moves
         // Long-press on the game board triggers rapid drop mode (300ms hold)
         let touchStartX = 0, touchStartY = 0;
         let touchStartTime = 0;
