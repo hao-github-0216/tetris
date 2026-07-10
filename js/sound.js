@@ -66,5 +66,13 @@ const SoundModule = (() => {
         playTone(150, 0.06, 'square', 0.1);
     }
 
-    return { playLock, playMove, playRotate, playHardDrop, playLineClear, playGameOver, playCombo, playHoldSwap, playRapidDrop };
+    function playRestart() {
+        init();
+        // Quick ascending chime: restart feeling
+        playTone(500, 0.08, 'sine', 0.1);
+        setTimeout(() => playTone(700, 0.08, 'sine', 0.1), 60);
+        setTimeout(() => playTone(900, 0.1, 'triangle', 0.12), 120);
+    }
+
+    return { playLock, playMove, playRotate, playHardDrop, playLineClear, playGameOver, playCombo, playHoldSwap, playRapidDrop, playRestart };
 })();

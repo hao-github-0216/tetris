@@ -538,6 +538,7 @@
                 <button class="ctrl-btn hold-btn" id="ctrl-hold" aria-label="保留">保留</button>
                 <button class="ctrl-btn" id="ctrl-pause" aria-label="暫停">暫停</button>
                 <button class="ctrl-btn drop-btn" id="ctrl-drop" aria-label="硬降">硬降 ⤓</button>
+                <button class="ctrl-btn" id="ctrl-restart" aria-label="重新開始">重新開始</button>
             </div>
             <!-- Row 2: Rotate (big) -->
             <div class="control-row">
@@ -1224,6 +1225,14 @@
             if (gameState === 'playing') HoldModule.tryHold();
             break;
 
+        case 'r':
+        case 'R':
+            if (gameState === 'playing' || gameState === 'paused') {
+                SoundModule.playRestart();
+                startGame();
+            }
+            break;
+
         case 'ArrowLeft':
                 case 'a':
                 case 'A':
@@ -1373,7 +1382,22 @@
                 });
             };
             ctrlPause.addEventListener('touchstart', (e) => { e.preventDefault(); doPause(); });
-            ctrlPause.addEventListener('mousedown', (e) => { e.preventDefault(); doPause(); });
+            ctrlPause.addEventListener('mousedown', (e) => { e.preventDefault(), doPause(); });
+        }
+
+        // Restart button
+        const ctrlRestart = document.getElementById('ctrl-restart');
+        if (ctrlRestart) {
+            const doRestart = () => {
+                mobileAction(() => {
+                    if (gameState === 'playing' || gameState === 'paused') {
+                        SoundModule.playRestart();
+                        startGame();
+                    }
+                });
+            };
+            ctrlRestart.addEventListener('touchstart', (e) => { e.preventDefault(); doRestart(); });
+            ctrlRestart.addEventListener('mousedown', (e) => { e.preventDefault(); doRestart(); });
         }
 
         // ==================== TOUCH SWIPE ON GAME BOARD ====================
