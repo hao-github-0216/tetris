@@ -282,11 +282,17 @@
 
         /* Mobile: <= 600px — Re-Designed for max game canvas */
         @media (max-width: 600px) {
+            /* Center game-container within flex body */
+            body {
+                justify-content: center;
+            }
+
             .game-container {
                 flex-direction: column;
                 align-items: center;
                 gap: 4px;
                 padding: 4px 4px 8px 4px;
+                max-width: 375px;
             }
 
             /* Mobile board wrapper — center and fill */
