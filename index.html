@@ -409,9 +409,9 @@
     <div class="game-container">
         <!-- Mobile compact info bar (hidden on desktop) -->
         <div class="mobile-stats">
-            <div><span class="mobile-stat-label">分數</span> <span class="stat-value" id="score">0</span></div>
-            <div><span class="mobile-stat-label">等級</span> <span class="stat-value" id="level">1</span></div>
-            <div><span class="mobile-stat-label">行數</span> <span class="stat-value" id="lines">0</span></div>
+            <div><span class="mobile-stat-label">分數</span> <span class="stat-value mobile-score">0</span></div>
+            <div><span class="mobile-stat-label">等級</span> <span class="stat-value mobile-level">1</span></div>
+            <div><span class="mobile-stat-label">行數</span> <span class="stat-value mobile-lines">0</span></div>
         </div>
 
         <!-- Mobile mini preview indicators (hidden on desktop) -->
@@ -899,9 +899,13 @@
                 if (hasCombo) {
                     score += bonus;
                     SoundModule.playCombo(ComboModule.getComboCount());
-                    const comboEl = document.getElementById('combo-display');
-                    comboEl.textContent = `${ComboModule.getComboCount()} COMBO!`;
-                    setTimeout(() => { comboEl.textContent = ''; }, 1500);
+                    const comboEl = isMobile
+                        ? document.querySelector('.mobile-previews .combo-text')
+                        : document.getElementById('combo-display');
+                    if (comboEl) {
+                        comboEl.textContent = `${ComboModule.getComboCount()} COMBO!`;
+                        setTimeout(() => { comboEl.textContent = ''; }, 1500);
+                    }
                 }
 
                 // Line clear sound
@@ -1070,9 +1074,18 @@
 
         // ==================== UI UPDATES ====================
         function updateUI() {
-            document.getElementById('score').textContent = score.toLocaleString();
-            document.getElementById('level').textContent = level;
-            document.getElementById('lines').textContent = linesCleared;
+            if (isMobile) {
+                const ms = document.querySelector('.mobile-score');
+                const ml = document.querySelector('.mobile-level');
+                const mn = document.querySelector('.mobile-lines');
+                if (ms) ms.textContent = score.toLocaleString();
+                if (ml) ml.textContent = level;
+                if (mn) mn.textContent = linesCleared;
+            } else {
+                document.getElementById('score').textContent = score.toLocaleString();
+                document.getElementById('level').textContent = level;
+                document.getElementById('lines').textContent = linesCleared;
+            }
         }
 
         function showOverlay(gameOver) {
