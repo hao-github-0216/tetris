@@ -44,6 +44,7 @@
 
         .board-wrapper {
             position: relative;
+            flex-shrink: 0;
         }
 
         #game-board {
@@ -201,6 +202,47 @@
 
         .mobile-stats {
             display: none; /* hidden on desktop */
+            flex-shrink: 0;
+        }
+
+        /* Game action buttons (Hold / Pause / Restart) */
+        .game-actions {
+            display: none;
+            gap: 8px;
+            justify-content: center;
+            width: 100%;
+            max-width: 360px;
+            padding: 8px 8px 4px 8px;
+            flex-shrink: 0;
+        }
+
+        .game-actions button {
+            background: rgba(26, 26, 62, 0.9);
+            color: #fff;
+            border: 2px solid #4a90d9;
+            padding: 8px 14px;
+            font-size: 13px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 72px;
+            text-align: center;
+        }
+
+        .game-actions button:hover,
+        .game-actions button:active {
+            background: #4a90d9;
+            box-shadow: 0 0 12px rgba(74, 144, 217, 0.5);
+        }
+
+        .game-actions button:disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .game-actions .btn-icon {
+            font-size: 16px;
+            margin-right: 4px;
         }
 
         /* Tablet: 601px - 1024px */
@@ -328,6 +370,9 @@
             }
 
             /* Control pad — compact */
+            .game-actions {
+                display: flex;
+            }
 
         /* Line clear animation */
         @keyframes lineClear {
@@ -387,6 +432,13 @@
                 <p>TETRIS</p>
                 <button class="btn" id="start-btn">開始遊戲</button>
             </div>
+        </div>
+
+        <!-- Game action buttons (Hold / Pause / Restart) -->
+        <div class="game-actions" id="game-actions">
+            <button id="btn-hold" class="btn-game-action" disabled><span class="btn-icon">⇋</span>保留</button>
+            <button id="btn-pause" class="btn-game-action" disabled><span class="btn-icon">⏸</span>暫停</button>
+            <button id="btn-restart" class="btn-game-action" disabled><span class="btn-icon">↻</span>重新開始</button>
         </div>
 
         <!-- Desktop side-panel -->
@@ -551,6 +603,11 @@
         // Flag to detect mobile (also updated on resize)
         let isMobile = window.matchMedia('(max-width: 600px)').matches;
 
+        // Action button references
+        const btnHold = document.getElementById('btn-hold');
+        const btnPause = document.getElementById('btn-pause');
+        const btnRestart = document.getElementById('btn-restart');
+
         // ==================== RESPONSIVE CANVAS SIZING ====================
         function resizeCanvas() {
             const wasMobile = isMobile;
@@ -574,8 +631,14 @@
                 mobilePreviews.style.display = isMobile ? 'flex' : 'none';
             }
 
-            // Show/hide mobile controls
+            // Show/hide game actions (mobile only)
+            const gameActions = document.getElementById('game-actions');
+            if (gameActions) {
+                gameActions.style.display = isMobile ? 'flex' : 'none';
             }
+
+            // Update button states
+            updateActionButtons();
 
             // Resize game board canvas to fit screen
             if (isMobile) {
@@ -1020,7 +1083,10 @@
                     <div class="panel-box" style="margin-top:12px;max-width:300px;"><h3>最高分排行</h3>${HighScoreModule.getHighScoreHTML()}</div>
                     <button class="btn" id="restart-btn">再玩一次</button>
                 `;
-                document.getElementById('restart-btn').addEventListener('click', startGame);
+                document.getElementById('restart-btn').addEventListener('click', () => {
+                    startGame();
+                });
+                updateActionButtons();
             } else {
                 overlay.innerHTML = `
                     <div class="overlay-logo" style='width:60px;height:60px;margin:0 auto 8px;'>
@@ -1040,9 +1106,49 @@
                     <p style="color: #aaa; margin-bottom: 20px;">按下開始遊戲按鈕或按 Enter 鍵</p>
                     <button class="btn" id="start-btn-inline">開始遊戲</button>
                 `;
-                document.getElementById('start-btn-inline').addEventListener('click', startGame);
+                document.getElementById('start-btn-inline').addEventListener('click', () => {
+                    startGame();
+                });
+                updateActionButtons();
             }
         }
+
+        // ==================== ACTION BUTTONS ====================
+        function updateActionButtons() {
+            const hasPiece = HoldModule.hasPiece;
+            btnHold.disabled = gameState !== 'playing' || !hasPiece;
+            btnPause.disabled = gameState === 'idle' || gameState === 'gameover';
+            btnRestart.disabled = gameState === 'idle';
+
+            // Update pause button text
+            if (btnPause) {
+                btnPause.innerHTML = gameState === 'paused'
+                    ? '<span class="btn-icon">▶</span>繼續'
+                    : '<span class="btn-icon">⏸</span>暫停';
+            }
+        }
+
+        btnHold.addEventListener('click', () => {
+            if (gameState === 'playing') {
+                HoldModule.tryHold();
+                updateActionButtons();
+            }
+        });
+
+        btnPause.addEventListener('click', () => {
+            if (gameState === 'playing' || gameState === 'paused') {
+                togglePause();
+                updateActionButtons();
+            }
+        });
+
+        btnRestart.addEventListener('click', () => {
+            if (gameState !== 'idle') {
+                SoundModule.playRestart();
+                startGame();
+                updateActionButtons();
+            }
+        });
 
         // ==================== GAME CONTROL ====================
         function startGame() {
@@ -1058,6 +1164,7 @@
             ComboModule.reset();
             HoldModule.reset();
             updateUI();
+            updateActionButtons();
             spawnPiece();
             drawNextPiece();
 
@@ -1076,13 +1183,18 @@
                     <p>按 P 或點擊按鈕繼續</p>
                     <button class="btn" id="resume-btn">繼續遊戲</button>
                 `;
-                document.getElementById('resume-btn').addEventListener('click', () => {
-                    gameState = 'playing';
-                    overlay.classList.add('hidden');
-                });
+                const resumeBtn = document.getElementById('resume-btn');
+                if (resumeBtn) {
+                    resumeBtn.addEventListener('click', () => {
+                        gameState = 'playing';
+                        overlay.classList.add('hidden');
+                        updateActionButtons();
+                    });
+                }
             } else if (gameState === 'paused') {
                 gameState = 'playing';
                 overlay.classList.add('hidden');
+                updateActionButtons();
             }
         }
 

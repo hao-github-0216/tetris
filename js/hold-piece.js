@@ -89,10 +89,14 @@ const HoldModule = (() => {
 
     function getHeldType() { return heldPiece; }
 
-    return { tryHold, reset, getHeldType, redrawHold: () => {
-        const canvas = getHoldCanvas();
-        if (heldPiece && canvas) {
-            drawHoldPiece(canvas.getContext('2d'), canvas, heldPiece);
+    return {
+        tryHold, reset, getHeldType,
+        get hasPiece() { return heldPiece !== null; },
+        redrawHold: () => {
+            const canvas = getHoldCanvas();
+            if (heldPiece && canvas) {
+                drawHoldPiece(canvas.getContext('2d'), canvas, heldPiece);
+            }
         }
-    }};
+    };
 })();
