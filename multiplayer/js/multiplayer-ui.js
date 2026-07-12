@@ -57,6 +57,138 @@ const MultiplayerGameController = (() => {
         setupGameUI();
     }
 
+    /**
+     * 在當前頁面直接啟動遊戲（不導航）
+     * 用於 Landing Page 創建/加入房間後直接開始遊戲
+     */
+    function startGameLocally(role, roomCode, playerId, otherPlayerId) {
+        // Stop any existing landing UI event listeners
+        gameStarted = false;
+
+        // Initialize Supabase (async — SDK loads from CDN)
+        const SUPABASE_URL = document.body.dataset.supabaseUrl || '';
+        const SUPABASE_ANON_KEY = document.body.dataset.supabaseAnonKey || '';
+
+        if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+            SupabaseClient.init(SUPABASE_URL, SUPABASE_ANON_KEY);
+        }
+
+        // Show game page, hide landing page
+        const landingPageEl = document.getElementById('landing-page');
+        const gamePageEl = document.getElementById('game-page');
+        if (landingPageEl) landingPageEl.style.display = 'none';
+        if (gamePageEl) gamePageEl.style.display = 'block';
+
+        // Create renderer (displays main board + opponent mini-board)
+        mainRenderer = MultiplayerRenderer.create('mp-canvas', 'opponent-canvas', GameCore);
+
+        // Set up sync engine (room ID will be set when room is created/joined)
+        syncEngine = SyncEngine.create({
+            roomCode: roomCode,
+            roomId: null,
+            playerId: playerId,
+            otherPlayerId: otherPlayerId || null,
+            supabaseClient: SupabaseClient
+        });
+
+        // Start sync engine (subscribes to realtime listeners)
+        syncEngine.start();
+
+        const myRole = role;
+
+        // Callback: when we receive the opponent's state
+        syncEngine.on(
+            (state) => {
+                if (state) {
+                    const cleared = state._lastClearedCount || 0;
+                    if (cleared > 0 && currentState && currentState.gameState === 'playing') {
+                        applyGarbageFromCleared(currentState, cleared);
+                    }
+                    const scoreEl = document.getElementById('mp-other-score');
+                    const levelEl = document.getElementById('mp-other-level');
+                    if (scoreEl) scoreEl.textContent = (state.score || 0).toString();
+                    if (levelEl) scoreEl.textContent = (state.level || 1);
+                }
+            },
+            (roomData) => {
+                currentRoomData = roomData;
+                updateMatchUI(roomData, playerId, roomCode);
+                updateOpponentInfoDisplay(roomData, myRole);
+
+                // Host: when guest_id becomes available, subscribe to guest's state
+                if (myRole === 'host' && roomData && roomData.guest_id && currentRoomData && currentRoomData.guest_id === null) {
+                    syncEngine.updateOtherPlayerId(roomData.guest_id);
+                }
+
+                // When room transitions to 'playing' (or host's 'waiting'), start the game (once)
+                if (roomData && ((roomData.status === 'playing') || (myRole === 'host' && roomData.status === 'waiting')) && !gameStarted) {
+                    gameStarted = true;
+                    if (roomData.id) {
+                        syncEngine.updateRoomId(roomData.id);
+                    }
+                    const state = GameCore.createEmptyState();
+                    state.gameState = 'playing';
+                    state.roomCode = roomCode;
+                    state.playerId = playerId;
+                    state.role = myRole;
+                    GameCore.spawnPiece(state);
+                    startGameLoop(state);
+                }
+            },
+            () => {
+                // Error callback
+                const gameOverEl = document.getElementById('mp-game-over');
+                if (gameOverEl) {
+                    gameOverEl.textContent = '連線錯誤，請重新加入房間';
+                    gameOverEl.style.display = 'block';
+                }
+            }
+        );
+
+        // Hide settings panel
+        const settingsPanel = document.getElementById('settings-panel');
+        if (settingsPanel) settingsPanel.style.display = 'none';
+
+        if (myRole === 'host') {
+            // Host: create room in Supabase, then update room info
+            createRoomAndStart(roomCode, playerId);
+        } else {
+            // Guest: join existing room
+            joinExistingRoom(roomCode, playerId);
+        }
+    }
+
+    /**
+     * Host creates room in Supabase, then starts
+     */
+    async function createRoomAndStart(roomCode, hostId) {
+        const result = await SupabaseClient.createRoom(roomCode, hostId);
+        if (result.error) {
+            console.error('[MultiplayerController] Create room error:', result.error);
+            showMPError('創建房間失敗：' + result.error);
+            return;
+        }
+        currentRoomData = result.room;
+        syncEngine.updateRoomId(result.room.id);
+        updateMatchUI(result.room, hostId, roomCode);
+    }
+
+    /**
+     * Guest joins existing room in Supabase
+     */
+    async function joinExistingRoom(roomCode, guestId) {
+        const result = await SupabaseClient.joinRoom(roomCode, guestId);
+        if (result.error) {
+            console.error('[MultiplayerController] Join room error:', result.error);
+            showMPError('加入房間失敗：' + result.error);
+            return;
+        }
+        currentRoomData = result.room;
+        syncEngine.updateRoomId(result.room.id);
+        updateMatchUI(result.room, guestId, roomCode);
+        syncEngine.updateOtherPlayerId(result.room.host_id);
+    }
+
     // ============ LANDING / LOBBY UI ============
     function setupLandingUI() {
         const createBtn = document.getElementById('mp-create-room');
@@ -66,7 +198,7 @@ const MultiplayerGameController = (() => {
         if (createBtn) {
             createBtn.addEventListener('click', () => {
                 const { roomCode, playerId } = RoomSystem.createLocalRoom();
-                navigateFromLanding('host', roomCode, playerId);
+                MultiplayerGameController.startGameLocally('host', roomCode, playerId);
             });
         }
 
@@ -78,7 +210,7 @@ const MultiplayerGameController = (() => {
                     return;
                 }
                 const { playerId } = RoomSystem.joinLocalRoom(roomCode);
-                navigateToGamePage('guest', roomCode, playerId, null);
+                MultiplayerGameController.startGameLocally('guest', roomCode, playerId);
             });
         }
     }
@@ -100,7 +232,7 @@ const MultiplayerGameController = (() => {
 
         const { roomCode, playerId, role } = getURLParams();
         if (!roomCode || !playerId) {
-            navigateToLanding();
+            showLanding();
             return;
         }
 
@@ -184,7 +316,7 @@ const MultiplayerGameController = (() => {
                 .then(({ error, room }) => {
                     if (error || !room) {
                         showMPError('找不到此房間或房間已不存在');
-                        setTimeout(() => navigateToLanding(), 2000);
+                        setTimeout(() => showLanding(), 2000);
                         return;
                     }
                     // Join the room (updates guest_id and status to 'playing')
@@ -192,7 +324,7 @@ const MultiplayerGameController = (() => {
                         .then(({ error: joinError, room: joinedRoom }) => {
                             if (joinError) {
                                 showMPError('無法加入房間：' + joinError);
-                                setTimeout(() => navigateToLanding(), 2000);
+                                setTimeout(() => showLanding(), 2000);
                                 return;
                             }
                             currentRoomData = joinedRoom;
@@ -267,6 +399,14 @@ const MultiplayerGameController = (() => {
             'X': () => { const s = getCurrentState(); if (s && s.gameState === 'playing' && !s.hasHeld) GameCore.holdPiece(s); },
             'Escape': () => { showLanding(); }
         };
+
+        // Back button: return to landing form
+        const backBtn = document.getElementById('mp-back-btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                showLanding();
+            });
+        }
 
         // Touch controls
         setupTouchControls(keyMap);
@@ -378,32 +518,17 @@ const MultiplayerGameController = (() => {
     }
 
     // ============ NAVIGATION ============
-    function navigateToLanding() {
-        window.location.href = '../index.html';
-    }
-
-    // Redirect landing page create/join to multiplayer game
-    function navigateFromLanding(role, roomCode, playerId, otherPlayerId) {
-        window.location.href = `index.html?roomCode=${encodeURIComponent(roomCode)}&playerId=${encodeURIComponent(playerId)}&role=${role}`;
-        if (otherPlayerId) {
-            window.location.href += `&otherPlayerId=${encodeURIComponent(otherPlayerId)}`;
-        }
-    }
-
-    function navigateToGamePage(role, roomCode, playerId, otherPlayerId) {
-        const url = new URL('index.html', window.location.origin);
-        url.searchParams.set('roomCode', roomCode);
-        url.searchParams.set('playerId', playerId);
-        url.searchParams.set('role', role);
-        if (otherPlayerId) {
-            url.searchParams.set('otherPlayerId', otherPlayerId);
-        }
-        window.location.href = url.toString();
-    }
-
+    // (All navigation is now handled by startGameLocally / showLanding locally)
     function showLanding() {
         stopGameLoop();
-        navigateToLanding();
+        // Show landing page, hide game page (stays on multiplayer page)
+        const landingPageEl = document.getElementById('landing-page');
+        const gamePageEl = document.getElementById('game-page');
+        if (landingPageEl) landingPageEl.style.display = 'block';
+        if (gamePageEl) gamePageEl.style.display = 'none';
+        // Reset join form
+        const joinLobby = document.getElementById('join-lobby');
+        if (joinLobby) joinLobby.classList.remove('active');
     }
 
     function getURLParams() {
@@ -426,14 +551,14 @@ const MultiplayerGameController = (() => {
         }
     }
 
-    return { init, _navigateFromLanding: navigateFromLanding };
+    return { init, startGameLocally };
 })();
 
 // ============ GLOBAL HANDLERS FOR HTML onclick ============
 window._mpHandleCreateRoom = function() {
     try {
         const { roomCode, playerId } = RoomSystem.createLocalRoom();
-        MultiplayerGameController._navigateFromLanding('host', roomCode, playerId);
+        MultiplayerGameController.startGameLocally('host', roomCode, playerId);
     } catch (e) {
         console.error('[Global] Error creating room:', e);
         alert('創建房間失敗：' + e.message);
@@ -454,7 +579,7 @@ window._mpHandleJoinRoom = function() {
             return;
         }
         const playerId = RoomSystem.generatePlayerId();
-        MultiplayerGameController._navigateFromLanding('guest', roomCode, playerId);
+        MultiplayerGameController.startGameLocally('guest', roomCode, playerId);
     } catch (e) {
         console.error('[Global] Error joining room:', e);
         alert('加入房間失敗：' + e.message);
