@@ -3,6 +3,10 @@
     {
       "src": "index.html",
       "use": "@vercel/static"
+    },
+    {
+      "src": "multiplayer/index.html",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
