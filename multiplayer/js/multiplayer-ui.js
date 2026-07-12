@@ -63,15 +63,26 @@ const MultiplayerGameController = (() => {
         const joinBtn = document.getElementById('mp-join-btn');
         const roomCodeInput = document.getElementById('mp-room-code-input');
 
+        console.log('[LandingUI] createBtn:', createBtn ? 'found' : 'NOT FOUND');
+        console.log('[LandingUI] joinBtn:', joinBtn ? 'found' : 'NOT FOUND');
+        console.log('[LandingUI] roomCodeInput:', roomCodeInput ? 'found' : 'NOT FOUND');
+
         if (createBtn) {
             createBtn.addEventListener('click', () => {
-                const { roomCode, playerId } = RoomSystem.createLocalRoom();
-                navigateFromLanding('host', roomCode, playerId);
+                console.log('[LandingUI] CREATE clicked');
+                try {
+                    const { roomCode, playerId } = RoomSystem.createLocalRoom();
+                    console.log('[LandingUI] Created room:', roomCode, 'playerId:', playerId);
+                    navigateFromLanding('host', roomCode, playerId);
+                } catch (e) {
+                    console.error('[LandingUI] Error in create:', e);
+                }
             });
         }
 
         if (joinBtn && roomCodeInput) {
             joinBtn.addEventListener('click', () => {
+                console.log('[LandingUI] JOIN clicked');
                 const roomCode = roomCodeInput.value.trim().toUpperCase();
                 if (!RoomSystem.validateRoomCode(roomCode)) {
                     showMPError('請輸入有效的房間碼');
