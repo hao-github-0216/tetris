@@ -97,11 +97,12 @@ const SupabaseClient = (() => {
     async function joinRoom(roomCode, guestId) {
         if (!supabase) return { error: 'Supabase 未初始化' };
 
-        // Find rooms with status 'playing' and no guest yet
+        // Find rooms with status 'waiting' and no guest yet
         const { data: room, error } = await supabase
             .from('rooms')
             .select('*')
             .eq('room_code', roomCode.toUpperCase())
+            .eq('status', 'waiting')
             .is('guest_id', null)
             .single();
 
@@ -109,11 +110,12 @@ const SupabaseClient = (() => {
             return { error: room ? '房間已不存在或已開始' : '找不到此房間碼' };
         }
 
-        // Update room with guest (keep status 'playing')
+        // Update room with guest and set status to 'playing'
         const { data: updated, error: updateError } = await supabase
             .from('rooms')
             .update({
-                guest_id: guestId
+                guest_id: guestId,
+                status: 'playing'
             })
             .eq('id', room.id)
             .select()

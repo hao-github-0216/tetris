@@ -31,8 +31,19 @@ const RoomSystem = (() => {
     /** 驗證房間碼格式 */
     function validateRoomCode(code) {
         if (!code || typeof code !== 'string') return false;
-        const upper = code.toUpperCase();
-        return upper.startsWith(PREFIX) && upper.length === CODE_LENGTH && /^[TET][23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{3}$/.test(upper);
+        const upper = code.toUpperCase().trim();
+        if (upper.length !== CODE_LENGTH) return false;
+        if (!upper.startsWith(PREFIX)) return false;
+        try {
+            const varChars = upper.slice(PREFIX_LENGTH);
+            for (let i = 0; i < varChars.length; i++) {
+                if (CHARS.indexOf(varChars[i]) === -1) return false;
+            }
+            return true;
+        } catch (e) {
+            console.error('[RoomSystem] validateRoomCode error:', e);
+            return false;
+        }
     }
 
     /** 解析房間碼回變數部分 */
