@@ -66,7 +66,7 @@ const MultiplayerGameController = (() => {
         if (createBtn) {
             createBtn.addEventListener('click', () => {
                 const { roomCode, playerId } = RoomSystem.createLocalRoom();
-                navigateToGamePage('host', roomCode, playerId, null);
+                navigateFromLanding('host', roomCode, playerId);
             });
         }
 
@@ -375,6 +375,25 @@ const MultiplayerGameController = (() => {
     // ============ NAVIGATION ============
     function navigateToLanding() {
         window.location.href = '../index.html';
+    }
+
+    function navigateToGamePage(role, roomCode, playerId, otherPlayerId) {
+        const url = new URL('multiplayer/index.html', window.location.origin);
+        url.searchParams.set('roomCode', roomCode);
+        url.searchParams.set('playerId', playerId);
+        url.searchParams.set('role', role);
+        if (otherPlayerId) {
+            url.searchParams.set('otherPlayerId', otherPlayerId);
+        }
+        window.location.href = url.toString();
+    }
+
+    // Redirect landing page create/join to multiplayer game
+    function navigateFromLanding(role, roomCode, playerId, otherPlayerId) {
+        window.location.href = `multiplayer/index.html?roomCode=${encodeURIComponent(roomCode)}&playerId=${encodeURIComponent(playerId)}&role=${role}`;
+        if (otherPlayerId) {
+            window.location.href += `&otherPlayerId=${encodeURIComponent(otherPlayerId)}`;
+        }
     }
 
     function navigateToGamePage(role, roomCode, playerId, otherPlayerId) {
