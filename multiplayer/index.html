@@ -416,6 +416,8 @@
         <div class="logo-sub">雙人線上對戰</div>
 
         <div class="mode-cards">
+            <!-- DEBUG TEST BUTTON -->
+            <button onclick="alert('JS works! Buttons ARE clickable.');" style="position:fixed;top:10px;right:10px;z-index:9999;background:red;color:white;padding:8px 16px;border:none;border-radius:6px;font-size:14px;">TEST JS</button>
             <div class="mode-card" id="mp-create-room">
                 <div class="mode-icon">🎮</div>
                 <h3>創建房間</h3>
@@ -551,6 +553,8 @@
     <script>
         // Bootstrap: determine if we're on the landing or game page
         (function() {
+            console.log('[BOOT] Page loaded, location:', window.location.href);
+            console.log('[BOOT] Scripts loaded successfully');
             const landingPage = document.getElementById('landing-page');
             const gamePage = document.getElementById('game-page');
             const settingsPanel = document.getElementById('settings-panel');
