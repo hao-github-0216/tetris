@@ -416,14 +416,16 @@
         <div class="logo-sub">雙人線上對戰</div>
 
         <div class="mode-cards">
-            <div class="mode-card" id="mp-create-room">
-                <button onclick="alert('Create Room clicked!');" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;width:100%;text-align:center;pointer-events:auto;">🎮 創建房間</button>
-                <p style="margin:0.3rem 0 0;font-size:0.8rem;color:var(--text-dim);">建立新房間，邀請朋友</p>
-            </div>
-            <div class="mode-card" id="mp-join-card">
-                <button onclick="document.getElementById('mp-room-code-input').focus(); document.getElementById('join-lobby').classList.add('active');" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;width:100%;text-align:center;pointer-events:auto;">🔗 加入房間</button>
-                <p style="margin:0.3rem 0 0;font-size:0.8rem;color:var(--text-dim);">輸入房間碼加入對局</p>
-            </div>
+            <button class="mode-card" id="mp-create-room" onclick="handleCreateRoom()">
+                <div class="mode-icon">🎮</div>
+                <h3>創建房間</h3>
+                <p>建立新房間，邀請朋友</p>
+            </button>
+            <button class="mode-card" id="mp-join-card" onclick="document.getElementById('mp-room-code-input').focus(); document.getElementById('join-lobby').classList.add('active');">
+                <div class="mode-icon">🔗</div>
+                <h3>加入房間</h3>
+                <p>輸入房間碼加入對局</p>
+            </button>
         </div>
 
         <div class="lobby-form" id="join-lobby">
