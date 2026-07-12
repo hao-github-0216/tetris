@@ -19,7 +19,7 @@ const RoomSystem = (() => {
 
     /** 生成房間碼（例：TET7A3）*/
     function generateRoomCode() {
-        const num = Math.floor(Math.random() * Math.pow(BASE, VAR_LENGTH));
+        let num = Math.floor(Math.random() * Math.pow(BASE, VAR_LENGTH));
         let code = '';
         for (let i = 0; i < VAR_LENGTH; i++) {
             code = CHARS[num % BASE] + code;
