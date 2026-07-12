@@ -416,9 +416,7 @@
         <div class="logo-sub">雙人線上對戰</div>
 
         <div class="mode-cards">
-            <!-- DEBUG TEST BUTTON -->
-            <button onclick="alert('JS works! Buttons ARE clickable.');" style="position:fixed;top:10px;right:10px;z-index:9999;background:red;color:white;padding:8px 16px;border:none;border-radius:6px;font-size:14px;">TEST JS</button>
-            <div class="mode-card" id="mp-create-room">
+            <div class="mode-card" id="mp-create-room" onclick="handleCreateRoom()">
                 <div class="mode-icon">🎮</div>
                 <h3>創建房間</h3>
                 <p>建立新房間，邀請朋友</p>
@@ -434,7 +432,7 @@
             <h3>加入房間</h3>
             <div class="form-row">
                 <input type="text" class="form-input" id="mp-room-code-input" maxlength="6" placeholder="TET7A3" />
-                <button class="form-btn" id="mp-join-btn">加入</button>
+                <button class="form-btn" id="mp-join-btn" onclick="handleJoinRoom()">加入</button>
             </div>
         </div>
 
@@ -553,8 +551,6 @@
     <script>
         // Bootstrap: determine if we're on the landing or game page
         (function() {
-            console.log('[BOOT] Page loaded, location:', window.location.href);
-            console.log('[BOOT] Scripts loaded successfully');
             const landingPage = document.getElementById('landing-page');
             const gamePage = document.getElementById('game-page');
             const settingsPanel = document.getElementById('settings-panel');
@@ -640,8 +636,6 @@
                     });
                 }
 
-                console.log('[Bootstrap] MultiplayerGameController:', typeof MultiplayerGameController);
-                console.log('[Bootstrap] init:', typeof MultiplayerGameController.init);
                 MultiplayerGameController.init(true);
             }
         })();

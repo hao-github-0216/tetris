@@ -63,26 +63,15 @@ const MultiplayerGameController = (() => {
         const joinBtn = document.getElementById('mp-join-btn');
         const roomCodeInput = document.getElementById('mp-room-code-input');
 
-        console.log('[LandingUI] createBtn:', createBtn ? 'found' : 'NOT FOUND');
-        console.log('[LandingUI] joinBtn:', joinBtn ? 'found' : 'NOT FOUND');
-        console.log('[LandingUI] roomCodeInput:', roomCodeInput ? 'found' : 'NOT FOUND');
-
         if (createBtn) {
             createBtn.addEventListener('click', () => {
-                console.log('[LandingUI] CREATE clicked');
-                try {
-                    const { roomCode, playerId } = RoomSystem.createLocalRoom();
-                    console.log('[LandingUI] Created room:', roomCode, 'playerId:', playerId);
-                    navigateFromLanding('host', roomCode, playerId);
-                } catch (e) {
-                    console.error('[LandingUI] Error in create:', e);
-                }
+                const { roomCode, playerId } = RoomSystem.createLocalRoom();
+                navigateFromLanding('host', roomCode, playerId);
             });
         }
 
         if (joinBtn && roomCodeInput) {
             joinBtn.addEventListener('click', () => {
-                console.log('[LandingUI] JOIN clicked');
                 const roomCode = roomCodeInput.value.trim().toUpperCase();
                 if (!RoomSystem.validateRoomCode(roomCode)) {
                     showMPError('請輸入有效的房間碼');
@@ -445,3 +434,40 @@ const MultiplayerGameController = (() => {
 
     return { init };
 })();
+
+// ============ GLOBAL HANDLERS FOR HTML onclick ============
+// These bridge HTML inline onclick handlers to the module functions
+window.handleCreateRoom = function() {
+    console.log('[Global] handleCreateRoom called');
+    try {
+        const { roomCode, playerId } = RoomSystem.createLocalRoom();
+        console.log('[Global] Created room:', roomCode, 'playerId:', playerId);
+        // Navigate to game page
+        window.location.href = `?roomCode=${roomCode}&playerId=${playerId}&mode=host`;
+    } catch (e) {
+        console.error('[Global] Error creating room:', e);
+        alert('創建房間失敗：' + e.message);
+    }
+};
+
+window.handleJoinRoom = function() {
+    console.log('[Global] handleJoinRoom called');
+    try {
+        const input = document.getElementById('mp-room-code-input');
+        const roomCode = input ? input.value.trim().toUpperCase() : '';
+        if (!roomCode) {
+            alert('請輸入房間碼');
+            return;
+        }
+        const roomId = RoomSystem.validateRoomCode(roomCode);
+        if (!roomId) {
+            alert('請輸入有效的房間碼');
+            return;
+        }
+        const playerId = RoomSystem.generateDeviceId();
+        window.location.href = `?roomCode=${roomCode}&playerId=${playerId}&mode=guest`;
+    } catch (e) {
+        console.error('[Global] Error joining room:', e);
+        alert('加入房間失敗：' + e.message);
+    }
+};
