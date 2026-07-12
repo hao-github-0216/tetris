@@ -416,12 +416,12 @@
         <div class="logo-sub">雙人線上對戰</div>
 
         <div class="mode-cards">
-            <button class="mode-card" id="mp-create-room" onclick="handleCreateRoom()">
+            <button class="mode-card" id="mp-create-room">
                 <div class="mode-icon">🎮</div>
                 <h3>創建房間</h3>
                 <p>建立新房間，邀請朋友</p>
             </button>
-            <button class="mode-card" id="mp-join-card" onclick="document.getElementById('mp-room-code-input').focus(); document.getElementById('join-lobby').classList.add('active');">
+            <button class="mode-card" id="mp-join-card">
                 <div class="mode-icon">🔗</div>
                 <h3>加入房間</h3>
                 <p>輸入房間碼加入對局</p>
@@ -432,7 +432,7 @@
             <h3>加入房間</h3>
             <div class="form-row">
                 <input type="text" class="form-input" id="mp-room-code-input" maxlength="6" placeholder="TET7A3" />
-                <button class="form-btn" id="mp-join-btn" onclick="handleJoinRoom()">加入</button>
+                <button class="form-btn" id="mp-join-btn">加入</button>
             </div>
         </div>
 
@@ -441,12 +441,6 @@
         <p style="margin-top: 2rem; font-size: 0.75rem; color: var(--text-dim);">
             <a href="../index.html" style="color: var(--accent);">← 返回單人模式</a>
         </p>
-
-        <!-- DEBUG: test landing page clicks -->
-        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-            <button onclick="alert('LANDING DEBUG 1 OK');" style="background:#ff4757;color:#fff;padding:6px 14px;border:none;border-radius:8px;font-size:13px;">DEBUG 1</button>
-            <button onclick="alert('LANDING DEBUG 2 OK');" style="background:#00d4ff;color:#0f0c29;padding:6px 14px;border:none;border-radius:8px;font-size:13px;">DEBUG 2</button>
-        </div>
 
         <!-- Settings toggle -->
         <button class="back-btn" id="show-settings-btn" style="margin-top: 1rem; font-size: 0.8rem;">⚙️ 設定 Supabase</button>

@@ -97,23 +97,23 @@ const SupabaseClient = (() => {
     async function joinRoom(roomCode, guestId) {
         if (!supabase) return { error: 'Supabase 未初始化' };
 
+        // Find rooms with status 'playing' and no guest yet
         const { data: room, error } = await supabase
             .from('rooms')
             .select('*')
             .eq('room_code', roomCode.toUpperCase())
-            .eq('status', 'waiting')
+            .is('guest_id', null)
             .single();
 
         if (error || !room) {
             return { error: room ? '房間已不存在或已開始' : '找不到此房間碼' };
         }
 
-        // Update room with guest
+        // Update room with guest (keep status 'playing')
         const { data: updated, error: updateError } = await supabase
             .from('rooms')
             .update({
-                guest_id: guestId,
-                status: 'playing'
+                guest_id: guestId
             })
             .eq('id', room.id)
             .select()
@@ -138,6 +138,23 @@ const SupabaseClient = (() => {
 
         if (error) return { error: error.message };
         return { error: null, room: data };
+    }
+
+    /**
+     * 更新房間狀態
+     * @param {string} roomId
+     * @param {string} newStatus — 'playing', 'finished', etc.
+     * @returns {Promise<{error: string|null}>}
+     */
+    async function updateRoomStatus(roomId, newStatus) {
+        if (!supabase) return { error: 'Supabase 未初始化' };
+
+        const { error } = await supabase
+            .from('rooms')
+            .update({ status: newStatus })
+            .eq('id', roomId);
+
+        return { error: error ? error.message : null };
     }
 
     /**
@@ -254,6 +271,7 @@ const SupabaseClient = (() => {
         createRoom,
         joinRoom,
         getRoom,
+        updateRoomStatus,
         subscribeToRoom,
         saveSnapshot,
         getOtherPlayerState,

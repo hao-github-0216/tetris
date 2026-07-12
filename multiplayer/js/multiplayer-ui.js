@@ -148,8 +148,8 @@ const MultiplayerGameController = (() => {
                     syncEngine.updateOtherPlayerId(roomData.guest_id);
                 }
 
-                // When room transitions to 'playing', start the game (once)
-                if (roomData && roomData.status === 'playing' && !gameStarted) {
+                // When room transitions to 'playing' (or host's 'waiting'), start the game (once)
+                if (roomData && ((roomData.status === 'playing') || (myRole === 'host' && roomData.status === 'waiting')) && !gameStarted) {
                     gameStarted = true;
                     if (roomData.id) {
                         syncEngine.updateRoomId(roomData.id);
@@ -212,6 +212,11 @@ const MultiplayerGameController = (() => {
                         currentRoomData = room;
                         if (room.id) {
                             syncEngine.updateRoomId(room.id);
+                            // Immediately set to 'playing' so host can start the game
+                            SupabaseClient.updateRoomStatus(room.id, 'playing')
+                                .then(() => {
+                                    // Sync engine will receive the update and start the game
+                                });
                         }
                     }
                 });
@@ -377,20 +382,9 @@ const MultiplayerGameController = (() => {
         window.location.href = '../index.html';
     }
 
-    function navigateToGamePage(role, roomCode, playerId, otherPlayerId) {
-        const url = new URL('multiplayer/index.html', window.location.origin);
-        url.searchParams.set('roomCode', roomCode);
-        url.searchParams.set('playerId', playerId);
-        url.searchParams.set('role', role);
-        if (otherPlayerId) {
-            url.searchParams.set('otherPlayerId', otherPlayerId);
-        }
-        window.location.href = url.toString();
-    }
-
     // Redirect landing page create/join to multiplayer game
     function navigateFromLanding(role, roomCode, playerId, otherPlayerId) {
-        window.location.href = `multiplayer/index.html?roomCode=${encodeURIComponent(roomCode)}&playerId=${encodeURIComponent(playerId)}&role=${role}`;
+        window.location.href = `index.html?roomCode=${encodeURIComponent(roomCode)}&playerId=${encodeURIComponent(playerId)}&role=${role}`;
         if (otherPlayerId) {
             window.location.href += `&otherPlayerId=${encodeURIComponent(otherPlayerId)}`;
         }
@@ -434,40 +428,3 @@ const MultiplayerGameController = (() => {
 
     return { init };
 })();
-
-// ============ GLOBAL HANDLERS FOR HTML onclick ============
-// These bridge HTML inline onclick handlers to the module functions
-window.handleCreateRoom = function() {
-    console.log('[Global] handleCreateRoom called');
-    try {
-        const { roomCode, playerId } = RoomSystem.createLocalRoom();
-        console.log('[Global] Created room:', roomCode, 'playerId:', playerId);
-        // Navigate to game page
-        window.location.href = `?roomCode=${roomCode}&playerId=${playerId}&mode=host`;
-    } catch (e) {
-        console.error('[Global] Error creating room:', e);
-        alert('創建房間失敗：' + e.message);
-    }
-};
-
-window.handleJoinRoom = function() {
-    console.log('[Global] handleJoinRoom called');
-    try {
-        const input = document.getElementById('mp-room-code-input');
-        const roomCode = input ? input.value.trim().toUpperCase() : '';
-        if (!roomCode) {
-            alert('請輸入房間碼');
-            return;
-        }
-        const roomId = RoomSystem.validateRoomCode(roomCode);
-        if (!roomId) {
-            alert('請輸入有效的房間碼');
-            return;
-        }
-        const playerId = RoomSystem.generateDeviceId();
-        window.location.href = `?roomCode=${roomCode}&playerId=${playerId}&mode=guest`;
-    } catch (e) {
-        console.error('[Global] Error joining room:', e);
-        alert('加入房間失敗：' + e.message);
-    }
-};
