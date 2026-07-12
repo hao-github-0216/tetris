@@ -10,20 +10,39 @@ const SupabaseClient = (() => {
      * 初始化 Supabase 客戶端
      * 需要透過環境變數或配置物件提供 URL 和 key
      */
-    function init(url, anonKey) {
-        if (!url || !anonKey) {
-            console.warn('[SupabaseClient] 未提供 URL 或 anon key，多人模式將無法使用');
+    /**
+     * Decode JWT to check the role
+     */
+    function decodeRole(key) {
+        try {
+            const payload = key.split('.')[1];
+            const decoded = JSON.parse(atob(payload));
+            return decoded.role || 'unknown';
+        } catch {
+            return 'unknown';
+        }
+    }
+
+    function init(url, key) {
+        if (!url || !key) {
+            console.warn('[SupabaseClient] 未提供 URL 或 key，多人模式將無法使用');
             return false;
         }
 
         try {
+            const role = decodeRole(key);
+            console.log('[SupabaseClient] key role:', role);
+
             // Dynamically load Supabase JS SDK v2
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
             script.onload = () => {
                 // @ts-ignore — supabase is loaded from CDN
-                supabase = window.supabase.createClient(url, anonKey);
+                supabase = window.supabase.createClient(url, key);
                 isConnected = true;
+                if (role === 'service_role') {
+                    console.log('[SupabaseClient] 使用 service_role key（具備完整寫入權限）');
+                }
                 console.log('[SupabaseClient] 已連線至 Supabase');
             };
             script.onerror = () => {
