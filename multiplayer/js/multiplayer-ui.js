@@ -426,5 +426,37 @@ const MultiplayerGameController = (() => {
         }
     }
 
-    return { init };
+    return { init, _navigateFromLanding: navigateFromLanding };
 })();
+
+// ============ GLOBAL HANDLERS FOR HTML onclick ============
+window._mpHandleCreateRoom = function() {
+    try {
+        const { roomCode, playerId } = RoomSystem.createLocalRoom();
+        MultiplayerGameController._navigateFromLanding('host', roomCode, playerId);
+    } catch (e) {
+        console.error('[Global] Error creating room:', e);
+        alert('創建房間失敗：' + e.message);
+    }
+};
+
+window._mpHandleJoinRoom = function() {
+    try {
+        const input = document.getElementById('mp-room-code-input');
+        const roomCode = input ? input.value.trim().toUpperCase() : '';
+        if (!roomCode) {
+            alert('請輸入房間碼');
+            return;
+        }
+        const roomId = RoomSystem.validateRoomCode(roomCode);
+        if (!roomId) {
+            alert('請輸入有效的房間碼');
+            return;
+        }
+        const playerId = RoomSystem.generateDeviceId();
+        MultiplayerGameController._navigateFromLanding('guest', roomCode, playerId);
+    } catch (e) {
+        console.error('[Global] Error joining room:', e);
+        alert('加入房間失敗：' + e.message);
+    }
+};

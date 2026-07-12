@@ -416,12 +416,12 @@
         <div class="logo-sub">雙人線上對戰</div>
 
         <div class="mode-cards">
-            <button class="mode-card" id="mp-create-room">
+            <button class="mode-card" id="mp-create-room" onclick="window._mpHandleCreateRoom()">
                 <div class="mode-icon">🎮</div>
                 <h3>創建房間</h3>
                 <p>建立新房間，邀請朋友</p>
             </button>
-            <button class="mode-card" id="mp-join-card">
+            <button class="mode-card" id="mp-join-card" onclick="document.getElementById('mp-room-code-input').focus(); document.getElementById('join-lobby').classList.add('active');">
                 <div class="mode-icon">🔗</div>
                 <h3>加入房間</h3>
                 <p>輸入房間碼加入對局</p>
@@ -432,7 +432,7 @@
             <h3>加入房間</h3>
             <div class="form-row">
                 <input type="text" class="form-input" id="mp-room-code-input" maxlength="6" placeholder="TET7A3" />
-                <button class="form-btn" id="mp-join-btn">加入</button>
+                <button class="form-btn" id="mp-join-btn" onclick="window._mpHandleJoinRoom()">加入</button>
             </div>
         </div>
 
