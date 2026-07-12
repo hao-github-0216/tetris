@@ -453,7 +453,7 @@ window._mpHandleJoinRoom = function() {
             alert('請輸入有效的房間碼');
             return;
         }
-        const playerId = RoomSystem.generateDeviceId();
+        const playerId = RoomSystem.generatePlayerId();
         MultiplayerGameController._navigateFromLanding('guest', roomCode, playerId);
     } catch (e) {
         console.error('[Global] Error joining room:', e);
