@@ -1,9 +1,12 @@
 /**
- * 混合同步器（SyncEngine）
- * 策略：每 2 秒快照到 Supabase + 垃圾行即時推送
+ * 權威同步器（SyncEngine v2）
+ * 策略：Host 維護單一真實狀態，透過 Supabase Realtime Channel 即時推送
+ *       Guest 發送輸入，Host 處理遊戲邏輯後廣播結果
  */
 const SyncEngine = (() => {
-    const SNAPSHOT_INTERVAL_MS = 2000;
+    const INPUT_INTERVAL_MS = 100;    // 每 100ms 發送一次輸入
+    const STATE_POLL_MS = 200;        // 每 200ms 拉取權威狀態
+    const MAX_INPUTS_QUEUED = 5;      // 最多排隊 5 個未處理輸入
 
     /**
      * 建立同步器實例
@@ -11,81 +14,87 @@ const SyncEngine = (() => {
      * @param {string} config.roomCode — 房間碼
      * @param {string} config.roomId — 房間 UUID (nullable — set later)
      * @param {string} config.playerId — 自己的玩家 ID
-     * @param {string} config.otherPlayerId — 對手玩家 ID
+     * @param {string} config.role — 'host' | 'guest'
      * @param {object} supabaseClient — SupabaseClient 模組
      * @returns {object} 同步器實例
      */
     function create(config) {
         const roomCode = config.roomCode;
-        // roomId is nullable at creation — will be set via updateRoomId
         let roomId = config.roomId || null;
         const playerId = config.playerId;
-        const otherPlayerId = config.otherPlayerId;
+        const role = config.role || 'host';
+        const supabaseClient = config.supabaseClient;
 
         let lastVersion = 0;
-        let otherPlayerState = null;
+        let authoritativeState = null;
         let ownRoomData = null;
         let isRunning = false;
 
         // Timers & subscriptions
-        let snapshotTimer = null;
+        let inputTimer = null;
+        let statePollTimer = null;
         let roomSub = null;
         let stateSub = null;
+
+        // Input queue (guest only)
+        let inputQueue = [];
+        let lastInputTime = 0;
 
         // Callbacks (set by the game controller)
         let onOtherStateUpdate = null;
         let onRoomStatusChange = null;
         let onOpponentDisconnected = null;
+        let onGameStarted = null;
+        let onGameStateSynced = null;
 
-        // ============ BROADCAST MY STATE ============
+        // ============ BROADCAST MY STATE (Host → Guest) ============
         function broadcastMyState(gameState) {
             if (!isRunning || !roomId) return;
 
             lastVersion++;
             const serialized = GameStateSerializer.serialize(gameState);
 
-            SupabaseClient.saveSnapshot(roomId, playerId, serialized, lastVersion)
+            supabaseClient.saveSnapshot(roomId, playerId, serialized, lastVersion)
                 .catch(err => console.error('[SyncEngine] 儲存快照失敗:', err));
+        }
+
+        // ============ SEND INPUT (Guest → Host) ============
+        function sendInput(inputType) {
+            if (!isRunning || !roomId) return;
+            if (role !== 'guest') return; // Only guest sends inputs
+
+            const now = Date.now();
+            if (now - lastInputTime < INPUT_INTERVAL_MS) return; // Debounce
+            lastInputTime = now;
+
+            // Queue input, process when possible
+            inputQueue.push({ type: inputType, ts: now });
+            if (inputQueue.length > MAX_INPUTS_QUEUED) {
+                inputQueue.shift(); // Drop oldest if too many
+            }
+            processInputQueue();
+        }
+
+        function processInputQueue() {
+            if (inputQueue.length === 0 || !roomId) return;
+
+            const input = inputQueue.shift();
+            supabaseClient.sendPlayerInput(roomId, playerId, input.type, lastVersion)
+                .catch(err => {
+                    console.warn('[SyncEngine] 輸入傳送失敗:', err);
+                    inputQueue.unshift(input); // Re-queue failed input
+                });
         }
 
         // ============ SUBSCRIBE TO OTHER PLAYER ============
         function subscribeToOtherPlayer() {
-            if (!SupabaseClient.isConnectedState() || !roomId || !otherPlayerId) return;
+            if (!supabaseClient.isConnectedState() || !roomId) return;
 
-            stateSub = SupabaseClient.subscribeToOtherPlayerState(
-                roomId, otherPlayerId, (payload) => {
+            stateSub = supabaseClient.subscribeToRoomStates(
+                roomId, (payload) => {
                     if (!payload || !payload.snapshot) return;
                     const state = GameStateSerializer.deserialize(payload.snapshot);
-                    otherPlayerState = state;
-                    if (onOtherStateUpdate) onOtherStateUpdate(state);
-                }
-            );
-        }
-
-        // ============ SUBSCRIBE TO OTHER PLAYER ============
-        function subscribeToOtherPlayerId(playerId) {
-            // Used when the other player ID becomes available (e.g., host learns guest's ID)
-            otherPlayerId = playerId;
-            console.log('[SyncEngine] 對手玩家 ID 更新為:', playerId);
-            subscribeToOtherPlayer();
-        }
-
-        // ============ SUBSCRIBE TO HOST (for guest) ============
-        function subscribeToHostState(hostId) {
-            // Guest subscribes to host's state updates
-            if (!SupabaseClient.isConnectedState() || !roomId) return;
-
-            // Unsubscribe existing if any
-            if (stateSub) {
-                SupabaseClient.getClient()?.channel(stateSub.id)?.unsubscribe?.();
-                stateSub = null;
-            }
-
-            stateSub = SupabaseClient.subscribeToOtherPlayerState(
-                roomId, hostId, (payload) => {
-                    if (!payload || !payload.snapshot) return;
-                    const state = GameStateSerializer.deserialize(payload.snapshot);
-                    otherPlayerState = state;
+                    authoritativeState = state;
                     if (onOtherStateUpdate) onOtherStateUpdate(state);
                 }
             );
@@ -93,23 +102,16 @@ const SyncEngine = (() => {
 
         // ============ SUBSCRIBE TO ROOM ============
         function subscribeToRoom() {
-            if (!SupabaseClient.isConnectedState()) return;
+            if (!supabaseClient.isConnectedState()) return;
 
-            roomSub = SupabaseClient.subscribeToRoom(roomCode, (roomData) => {
+            roomSub = supabaseClient.subscribeToRoom(roomCode, (roomData) => {
                 ownRoomData = roomData;
                 console.log('[SyncEngine] Room update:', roomData?.status, 'guest_id:', roomData?.guest_id);
                 if (onRoomStatusChange) onRoomStatusChange(roomData);
             });
         }
 
-        // ============ SEND GARBAGE EVENT ============
-        function sendGarbage(count) {
-            // In MVP, garbage is delivered via snapshots (clear handling).
-            // Advanced: use Supabase Broadcast for instant push.
-            console.log('[SyncEngine] 推送垃圾行:', count, 'to', otherPlayerId);
-        }
-
-        // ============ UPDATE ROOM ID (called when room is created/joined) ============
+        // ============ UPDATE ROOM ID ============
         function updateRoomId(newRoomId) {
             roomId = newRoomId;
             console.log('[SyncEngine] 房間 ID 更新為:', roomId);
@@ -118,38 +120,48 @@ const SyncEngine = (() => {
             subscribeToOtherPlayer();
         }
 
-        // ============ UPDATE OTHER PLAYER ID ============
-        function updateOtherPlayerId(newOtherId) {
-            otherPlayerId = newOtherId;
-            console.log('[SyncEngine] 對手玩家 ID 更新為:', newOtherId);
-
-            // Re-subscribe to other player state with updated ID
-            subscribeToOtherPlayer();
-        }
-
         // ============ START / STOP ============
         function start() {
             isRunning = true;
             subscribeToOtherPlayer();
             subscribeToRoom();
+
+            if (role === 'guest') {
+                // Guest: poll for authoritative state periodically
+                statePollTimer = setInterval(() => {
+                    if (!roomId || !supabaseClient.isConnectedState()) return;
+                    supabaseClient.getLatestState(roomId)
+                        .then(result => {
+                            if (result.state && result.state.player_id !== playerId) {
+                                const state = GameStateSerializer.deserialize(result.state.snapshot);
+                                authoritativeState = state;
+                                if (onOtherStateUpdate) onOtherStateUpdate(state);
+                            }
+                        })
+                        .catch(err => console.warn('[SyncEngine] 取得最新狀態失敗:', err));
+                }, STATE_POLL_MS);
+            }
         }
 
         function stop() {
             isRunning = false;
 
+            if (inputTimer) { clearInterval(inputTimer); inputTimer = null; }
+            if (statePollTimer) { clearInterval(statePollTimer); statePollTimer = null; }
+
             if (roomSub) {
-                try { SupabaseClient.getClient()?.channel(roomSub.id)?.unsubscribe?.(); } catch(e) {}
+                try { supabaseClient.getClient()?.channel(roomSub.id)?.unsubscribe?.(); } catch(e) {}
                 roomSub = null;
             }
             if (stateSub) {
-                try { SupabaseClient.getClient()?.channel(stateSub.id)?.unsubscribe?.(); } catch(e) {}
+                try { supabaseClient.getClient()?.channel(stateSub.id)?.unsubscribe?.(); } catch(e) {}
                 stateSub = null;
             }
         }
 
-        // ============ GET OTHER STATE ============
-        function getOtherState() {
-            return otherPlayerState;
+        // ============ GET AUTHORITY STATE ============
+        function getAuthoritativeState() {
+            return authoritativeState;
         }
 
         function getOwnRoomData() {
@@ -161,21 +173,21 @@ const SyncEngine = (() => {
         }
 
         // Set callbacks
-        function on(otherPlayerStateCb, roomCb, disconnectedCb) {
-            onOtherStateUpdate = otherPlayerStateCb;
+        function on(otherStateCb, roomCb, disconnectedCb, gameStartedCb, gameStateSyncedCb) {
+            onOtherStateUpdate = otherStateCb;
             onRoomStatusChange = roomCb;
             onOpponentDisconnected = disconnectedCb;
+            onGameStarted = gameStartedCb;
+            onGameStateSynced = gameStateSyncedCb;
         }
 
         return {
             start,
             stop,
             updateRoomId,
-            updateOtherPlayerId,
-            subscribeToHostState,
+            sendInput,
             broadcastMyState,
-            sendGarbage,
-            getOtherState,
+            getAuthoritativeState,
             getOwnRoomData,
             isRunningCheck,
             on

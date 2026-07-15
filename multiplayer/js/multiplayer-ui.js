@@ -1,6 +1,6 @@
 /**
- * 多人模式遊戲控制器
- * 整合 GameCore, Renderer, GarbageSystem, SyncEngine, SupabaseClient
+ * 多人模式遊戲控制器（Server-Authoritative）
+ * Host 維護單一真實狀態，Guest 發送輸入到 Host
  */
 const MultiplayerGameController = (() => {
     let mainRenderer = null;
@@ -12,6 +12,7 @@ const MultiplayerGameController = (() => {
     let myRole = '';
     let myRoomCode = '';
     let myPlayerId = '';
+    let opponentState = null;
 
     // ============ GARBAGE APPLICATION (multiplayer-only) ============
     function applyGarbageFromCleared(state, clearedCount) {
@@ -44,7 +45,7 @@ const MultiplayerGameController = (() => {
         await setupGameUI();
     }
 
-    async function startGameLocally(role, roomCode, playerId, otherPlayerId) {
+    async function startGameLocally(role, roomCode, playerId) {
         console.log('[Multiplayer] startGameLocally:', { role, roomCode, playerId });
         gameStarted = false;
         myRole = role;
@@ -76,8 +77,7 @@ const MultiplayerGameController = (() => {
         console.log('[Multiplayer] Renderer created');
 
         syncEngine = SyncEngine.create({
-            roomCode, roomId: null, playerId,
-            otherPlayerId: otherPlayerId || null, supabaseClient: SupabaseClient
+            roomCode, roomId: null, playerId, role, supabaseClient: SupabaseClient
         });
         syncEngine.start();
         console.log('[Multiplayer] SyncEngine started');
@@ -85,6 +85,7 @@ const MultiplayerGameController = (() => {
         syncEngine.on(
             (state) => {
                 if (state) {
+                    opponentState = state;
                     const cleared = state._lastClearedCount || 0;
                     if (cleared > 0 && currentState && currentState.gameState === 'playing') {
                         applyGarbageFromCleared(currentState, cleared);
@@ -98,10 +99,9 @@ const MultiplayerGameController = (() => {
             (roomData) => {
                 currentRoomData = roomData;
                 updateMatchUI(roomData, playerId, roomCode);
-                if (myRole === 'host' && roomData && roomData.guest_id && currentRoomData && currentRoomData.guest_id === null) {
-                    syncEngine.updateOtherPlayerId(roomData.guest_id);
+                if (myRole === 'host' && roomData && roomData.guest_id) {
+                    console.log('[Multiplayer] Host detected guest:', roomData.guest_id);
                 }
-                _startGameIfReady(roomData);
             },
             () => {
                 const el = document.getElementById('mp-message');
@@ -114,24 +114,6 @@ const MultiplayerGameController = (() => {
         } else {
             joinExistingRoom(myRoomCode, myPlayerId);
         }
-    }
-
-    function _startGameIfReady(roomData) {
-        console.log('[Multiplayer] _startGameIfReady called:', { roomData: roomData?.status, gameStarted, myRole });
-        if (!roomData || gameStarted) return;
-        if (roomData.status !== 'playing' && !(myRole === 'host' && roomData.status === 'waiting')) return;
-
-        console.log('[Multiplayer] Starting game for', myRole, 'in room', roomData.id);
-        gameStarted = true;
-        if (roomData.id) syncEngine.updateRoomId(roomData.id);
-
-        const state = GameCore.createEmptyState();
-        state.gameState = 'playing';
-        state.roomCode = myRoomCode;
-        state.playerId = myPlayerId;
-        state.role = myRole;
-        GameCore.spawnPiece(state);
-        startGameLoop(state);
     }
 
     async function createRoomAndStart(roomCode, hostId) {
@@ -148,8 +130,10 @@ const MultiplayerGameController = (() => {
         updateMatchUI(result.room, hostId, roomCode);
         const roomDisplay = document.getElementById('mp-room-display');
         if (roomDisplay) roomDisplay.textContent = roomCode;
-        console.log('[Multiplayer] Calling _startGameIfReady for host');
-        _startGameIfReady(result.room);
+        
+        // Host starts game immediately after creating room
+        console.log('[Multiplayer] Host starting game loop after room creation');
+        startHostGame(result.room);
     }
 
     async function joinExistingRoom(roomCode, guestId) {
@@ -164,9 +148,38 @@ const MultiplayerGameController = (() => {
         currentRoomData = result.room;
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, guestId, roomCode);
-        syncEngine.updateOtherPlayerId(result.room.host_id);
-        console.log('[Multiplayer] Calling _startGameIfReady for guest');
-        _startGameIfReady(result.room);
+        
+        // Guest: start a lightweight game loop to render Host's authoritative state
+        console.log('[Multiplayer] Guest starting render loop');
+        startGuestRenderLoop(result.room);
+    }
+
+    function startGuestRenderLoop(roomData) {
+        console.log('[Multiplayer] ✅ Starting guest render loop in room', roomData.id);
+        gameStarted = true;
+
+        // Create empty state for rendering
+        const state = GameCore.createEmptyState();
+        state.gameState = 'playing';
+        state.roomCode = myRoomCode;
+        state.playerId = myPlayerId;
+        state.role = myRole;
+        currentState = state;
+
+        startGameLoop(state);
+    }
+
+    function startHostGame(roomData) {
+        console.log('[Multiplayer] ✅ Starting game for host in room', roomData.id);
+        gameStarted = true;
+
+        const state = GameCore.createEmptyState();
+        state.gameState = 'playing';
+        state.roomCode = myRoomCode;
+        state.playerId = myPlayerId;
+        state.role = myRole;
+        GameCore.spawnPiece(state);
+        startGameLoop(state);
     }
 
     function getMyRoomCode() { return myRoomCode; }
@@ -196,13 +209,14 @@ const MultiplayerGameController = (() => {
         mainRenderer = MultiplayerRenderer.create('mp-canvas', 'opponent-canvas', GameCore);
 
         syncEngine = SyncEngine.create({
-            roomCode, roomId: null, playerId, otherPlayerId: null, supabaseClient: SupabaseClient
+            roomCode, roomId: null, playerId, role, supabaseClient: SupabaseClient
         });
         syncEngine.start();
 
         syncEngine.on(
             (state) => {
                 if (state) {
+                    opponentState = state;
                     const cleared = state._lastClearedCount || 0;
                     if (cleared > 0 && currentState && currentState.gameState === 'playing') {
                         applyGarbageFromCleared(currentState, cleared);
@@ -216,16 +230,22 @@ const MultiplayerGameController = (() => {
             (roomData) => {
                 currentRoomData = roomData;
                 updateMatchUI(roomData, playerId, roomCode);
-                if (myRole === 'host' && roomData && roomData.guest_id && currentRoomData && currentRoomData.guest_id === null) {
-                    syncEngine.updateOtherPlayerId(roomData.guest_id);
+                if (myRole === 'host' && roomData && roomData.guest_id) {
+                    console.log('[Multiplayer] setupGameUI: Host detected guest:', roomData.guest_id);
                 }
-                _startGameIfReady(roomData);
             },
             () => {
                 const el = document.getElementById('mp-message');
                 if (el) { el.textContent = '對手的連線已中斷'; el.style.display = 'block'; }
             }
         );
+
+        // Host: create room and start; Guest: join existing room and subscribe to host
+        if (myRole === 'host') {
+            await createRoomAndStart(roomCode, playerId);
+        } else {
+            await joinExistingRoom(roomCode, playerId);
+        }
 
         setupMultiplayerControls();
     }
@@ -235,18 +255,25 @@ const MultiplayerGameController = (() => {
         currentState = state;
 
         function gameLoop(timestamp) {
-            if (state.currentPiece && state.gameState === 'playing') {
-                if (!state._lastDropTime) state._lastDropTime = timestamp;
-                const dropInterval = GameCore.getDropInterval(state.level);
-                const elapsed = timestamp - state._lastDropTime;
-                if (elapsed >= dropInterval) {
-                    handleAutoDrop(state);
-                    state._lastDropTime = timestamp;
+            try {
+                if (state.currentPiece && state.gameState === 'playing') {
+                    if (!state._lastDropTime) state._lastDropTime = timestamp;
+                    const dropInterval = GameCore.getDropInterval(state.level);
+                    const elapsed = timestamp - state._lastDropTime;
+                    if (elapsed >= dropInterval) {
+                        handleAutoDrop(state);
+                        state._lastDropTime = timestamp;
+                    }
                 }
-            }
 
-            const opponentSnapshot = syncEngine.getOtherState();
-            mainRenderer.render(state, opponentSnapshot);
+                const opponentSnapshot = syncEngine.getAuthoritativeState();
+                mainRenderer.render(state, opponentSnapshot);
+            } catch (e) {
+                console.error('[Multiplayer] Game loop error:', e);
+                stopGameLoop();
+                showMPMessage('遊戲循環錯誤：' + e.message);
+                return;
+            }
 
             gameLoopId = requestAnimationFrame(gameLoop);
         }
@@ -257,12 +284,12 @@ const MultiplayerGameController = (() => {
     // ============ INPUT HANDLING ============
     function setupMultiplayerControls() {
         const keyMap = {
-            'ArrowLeft':  () => { const s = getCurrentState(); if (s && s.gameState === 'playing') GameCore.move(s, -1, 0); },
-            'ArrowRight': () => { const s = getCurrentState(); if (s && s.gameState === 'playing') GameCore.move(s, 1, 0); },
-            'ArrowDown':  () => { const s = getCurrentState(); if (s && s.gameState === 'playing') GameCore.dropPiece(s); },
-            'ArrowUp':    () => { const s = getCurrentState(); if (s && s.gameState === 'playing') GameCore.tryRotate(s); },
-            ' ':          () => { const s = getCurrentState(); if (s && s.gameState === 'playing') GameCore.commitHardDrop(s); },
-            'x': () => { const s = getCurrentState(); if (s && s.gameState === 'playing' && !s.hasHeld) GameCore.holdPiece(s); },
+            'ArrowLeft':  () => { sendInput('left'); },
+            'ArrowRight': () => { sendInput('right'); },
+            'ArrowDown':  () => { sendInput('down'); },
+            'ArrowUp':    () => { sendInput('rotate'); },
+            ' ':          () => { sendInput('hard_drop'); },
+            'x': () => { sendInput('hold'); },
             'Escape': () => { showLanding(); }
         };
 
@@ -275,6 +302,11 @@ const MultiplayerGameController = (() => {
             const handler = keyMap[e.key];
             if (handler) { e.preventDefault(); handler(); }
         });
+    }
+
+    function sendInput(inputType) {
+        if (!syncEngine || !currentState || currentState.gameState !== 'playing') return;
+        syncEngine.sendInput(inputType);
     }
 
     function setupTouchControls(keyMap) {
@@ -346,7 +378,7 @@ const MultiplayerGameController = (() => {
         const landingPageEl = document.getElementById('landing-page');
         const gamePageEl = document.getElementById('game-page');
         if (landingPageEl) landingPageEl.style.display = 'flex';
-        if (gamePageEl) gamePageEl.style.display = 'none';
+        if (gamePageEl) landingPageEl.style.display = 'none';
         const joinForm = document.getElementById('join-form-inline');
         if (joinForm) joinForm.classList.remove('active');
     }

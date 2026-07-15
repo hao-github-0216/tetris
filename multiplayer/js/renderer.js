@@ -14,8 +14,16 @@ const MultiplayerRenderer = (() => {
         const mainCanvas = document.getElementById(mainCanvasId);
         const mainCtx = mainCanvas ? mainCanvas.getContext('2d') : null;
 
+        if (!mainCtx) {
+            console.error('[Renderer] Canvas', mainCanvasId, 'not found or getContext failed');
+        }
+
         const opponentCanvas = opponentCanvasId ? document.getElementById(opponentCanvasId) : null;
         const opponentCtx = opponentCanvas ? opponentCanvas.getContext('2d') : null;
+
+        if (opponentCanvas && !opponentCtx) {
+            console.warn('[Renderer] Opponent canvas', opponentCanvasId, 'getContext returned null');
+        }
 
         const COLS = gameCore.COLS;
         const ROWS = gameCore.ROWS;

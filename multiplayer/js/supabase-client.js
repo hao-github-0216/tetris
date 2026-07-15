@@ -29,11 +29,15 @@ const SupabaseClient = (() => {
             return Promise.reject('Missing URL or key');
         }
 
+        // If supabase already exists, just ensure it's connected
         if (supabase) {
             try {
                 supabase = window.supabase.createClient(url, key);
+                isConnected = true;
+                console.log('[SupabaseClient] Client re-initialized');
                 return Promise.resolve();
             } catch (e) {
+                console.error('[SupabaseClient] Re-init failed:', e);
                 return Promise.reject(e);
             }
         }
@@ -45,10 +49,15 @@ const SupabaseClient = (() => {
             script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
             script.onload = () => {
                 // @ts-ignore — supabase is loaded from CDN
-                supabase = window.supabase.createClient(url, key);
-                isConnected = true;
-                console.log('[SupabaseClient] SDK 載入完成');
-                resolve();
+                try {
+                    supabase = window.supabase.createClient(url, key);
+                    isConnected = true;
+                    console.log('[SupabaseClient] SDK 載入完成');
+                    resolve();
+                } catch (e) {
+                    console.error('[SupabaseClient] createClient failed:', e);
+                    reject(e);
+                }
             };
             script.onerror = () => {
                 console.error('[SupabaseClient] 載入 Supabase SDK 失敗');
@@ -253,6 +262,72 @@ const SupabaseClient = (() => {
     }
 
     /**
+     * 訂閱房間狀態更新（Realtime）— 用於 Server-Authoritative 同步
+     * @param {string} roomId — 房間 UUID
+     * @param {function} callback — 收到更新時呼叫
+     */
+    function subscribeToRoomStates(roomId, callback) {
+        if (!supabase) return null;
+
+        return supabase
+            .channel('room_states:' + roomId)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'room_states',
+                filter: `room_id=eq.${roomId}`
+            }, (payload) => {
+                callback(payload.new);
+            })
+            .subscribe();
+    }
+
+    /**
+     * 取得最新權威狀態
+     * @param {string} roomId
+     */
+    async function getLatestState(roomId) {
+        if (!supabase) return { error: 'Supabase 未初始化' };
+
+        const { data, error } = await supabase
+            .from('room_states')
+            .select('*')
+            .eq('room_id', roomId)
+            .order('version', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (error) return { error: error.message, state: null };
+        return { error: null, state: data };
+    }
+
+    /**
+     * 發送玩家輸入（Guest → Host）
+     * @param {string} roomId
+     * @param {string} playerId
+     * @param {string} inputType — 'left', 'right', 'down', 'rotate', 'hard_drop', 'hold'
+     * @param {number} version
+     */
+    async function sendPlayerInput(roomId, playerId, inputType, version) {
+        if (!supabase) return { error: 'Supabase 未初始化' };
+
+        const { data, error } = await supabase
+            .from('player_inputs')
+            .insert({
+                room_id: roomId,
+                player_id: playerId,
+                input_type: inputType,
+                version: version,
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (error) return { error: error.message };
+        return { error: null, input: data };
+    }
+
+    /**
      * 結束對局
      * @param {string} roomId
      * @param {string} status — 'finished' | 'error'
@@ -277,9 +352,12 @@ const SupabaseClient = (() => {
         getRoom,
         updateRoomStatus,
         subscribeToRoom,
+        subscribeToRoomStates,
         saveSnapshot,
         getOtherPlayerState,
         subscribeToOtherPlayerState,
+        getLatestState,
+        sendPlayerInput,
         finishRoom
     };
 })();
