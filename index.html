@@ -404,8 +404,105 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- Mode Selection Overlay -->
+    <style>
+        #mode-select-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, #0a0a2e, #1a1a4e, #0f0f3e);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 1.5rem;
+        }
+
+        #mode-select-overlay.hidden {
+            display: none !important;
+        }
+
+        .mode-logo {
+            font-size: clamp(2rem, 6vw, 3rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, #00d4ff, #c44dff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .mode-subtitle {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.9rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .mode-cards {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .mode-card-btn {
+            flex: 1 1 200px;
+            max-width: 240px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 1.5rem 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            color: #fff;
+        }
+
+        .mode-card-btn:hover, .mode-card-btn:active {
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0,212,255,0.35);
+            transform: translateY(-2px);
+        }
+
+        .mode-icon {
+            font-size: 2rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .mode-card-btn h3 {
+            font-size: 1.15rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .mode-card-btn p {
+            color: rgba(255,255,255,0.55);
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+    </style>
 </head>
 <body>
+    <!-- ============ MODE SELECTION OVERLAY ============ -->
+    <div id="mode-select-overlay">
+        <div class="mode-logo">俄羅斯方塊</div>
+        <div class="mode-subtitle">TETRIS — 選擇模式</div>
+        <div class="mode-cards">
+            <button class="mode-card-btn" onclick="document.getElementById('mode-select-overlay').classList.add('hidden'); document.getElementById('game-page').style.display='';">
+                <div class="mode-icon">👤</div>
+                <h3>單人模式</h3>
+                <p>經典單人對戰，挑戰最高分</p>
+            </button>
+            <button class="mode-card-btn" onclick="location.href='multiplayer/index.html'">
+                <div class="mode-icon">👥</div>
+                <h3>雙人對戰</h3>
+                <p>線上即時雙人對抗，消行送垃圾</p>
+            </button>
+        </div>
+    </div>
+
     <div class="game-container">
         <!-- Mobile compact info bar (hidden on desktop) -->
         <div class="mobile-stats">
