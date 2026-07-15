@@ -85,10 +85,22 @@ const MultiplayerGameController = (() => {
         syncEngine.on(
             (state) => {
                 if (state) {
-                    opponentState = state;
-                    const cleared = state._lastClearedCount || 0;
-                    if (cleared > 0 && currentState && currentState.gameState === 'playing') {
-                        applyGarbageFromCleared(currentState, cleared);
+                    // Apply authoritative state to our own state for rendering
+                    if (myRole === 'guest') {
+                        // Guest: Host's state IS our state — apply directly
+                        const newState = GameCore.deserialize(GameCore.serialize(state));
+                        if (!currentState) {
+                            currentState = newState;
+                        } else {
+                            Object.assign(currentState, newState);
+                        }
+                    } else {
+                        // Host: track opponent state separately
+                        opponentState = state;
+                        const cleared = state._lastClearedCount || 0;
+                        if (cleared > 0 && currentState && currentState.gameState === 'playing') {
+                            applyGarbageFromCleared(currentState, cleared);
+                        }
                     }
                     const scoreEl = document.getElementById('mp-other-score');
                     const levelEl = document.getElementById('mp-other-level');
@@ -134,6 +146,14 @@ const MultiplayerGameController = (() => {
         // Host starts game immediately after creating room
         console.log('[Multiplayer] Host starting game loop after room creation');
         startHostGame(result.room);
+        
+        // Immediately broadcast initial state so Guests don't wait for first auto-drop
+        setTimeout(() => {
+            if (syncEngine && currentState) {
+                syncEngine.broadcastMyState(currentState);
+                console.log('[Multiplayer] Host initial state broadcast sent');
+            }
+        }, 100);
     }
 
     async function joinExistingRoom(roomCode, guestId) {
@@ -216,10 +236,22 @@ const MultiplayerGameController = (() => {
         syncEngine.on(
             (state) => {
                 if (state) {
-                    opponentState = state;
-                    const cleared = state._lastClearedCount || 0;
-                    if (cleared > 0 && currentState && currentState.gameState === 'playing') {
-                        applyGarbageFromCleared(currentState, cleared);
+                    // Apply authoritative state to our own state for rendering
+                    if (myRole === 'guest') {
+                        // Guest: Host's state IS our state — apply directly
+                        const newState = GameCore.deserialize(GameCore.serialize(state));
+                        if (!currentState) {
+                            currentState = newState;
+                        } else {
+                            Object.assign(currentState, newState);
+                        }
+                    } else {
+                        // Host: track opponent state separately
+                        opponentState = state;
+                        const cleared = state._lastClearedCount || 0;
+                        if (cleared > 0 && currentState && currentState.gameState === 'playing') {
+                            applyGarbageFromCleared(currentState, cleared);
+                        }
                     }
                     const scoreEl = document.getElementById('mp-other-score');
                     const levelEl = document.getElementById('mp-other-level');
@@ -256,7 +288,8 @@ const MultiplayerGameController = (() => {
 
         function gameLoop(timestamp) {
             try {
-                if (state.currentPiece && state.gameState === 'playing') {
+                // Only Host drives game simulation. Guest is render-only.
+                if (myRole === 'host' && state.currentPiece && state.gameState === 'playing') {
                     if (!state._lastDropTime) state._lastDropTime = timestamp;
                     const dropInterval = GameCore.getDropInterval(state.level);
                     const elapsed = timestamp - state._lastDropTime;
