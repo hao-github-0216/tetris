@@ -45,6 +45,7 @@ const MultiplayerGameController = (() => {
     }
 
     async function startGameLocally(role, roomCode, playerId, otherPlayerId) {
+        console.log('[Multiplayer] startGameLocally:', { role, roomCode, playerId });
         gameStarted = false;
         myRole = role;
         myRoomCode = roomCode;
@@ -52,28 +53,34 @@ const MultiplayerGameController = (() => {
 
         const SUPABASE_URL = document.body.dataset.supabaseUrl || '';
         const SUPABASE_ANON_KEY = document.body.dataset.supabaseAnonKey || '';
+        console.log('[Multiplayer] Supabase URL present:', !!SUPABASE_URL);
 
         if (SUPABASE_URL && SUPABASE_ANON_KEY) {
             try {
                 await SupabaseClient.init(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('[Multiplayer] Supabase init complete');
             } catch (e) {
+                console.error('[Multiplayer] Supabase init failed:', e);
                 showMPError('無法連線至伺服器：' + e);
                 return;
             }
         }
 
+        console.log('[Multiplayer] Showing game page, hiding landing');
         const landingPageEl = document.getElementById('landing-page');
         const gamePageEl = document.getElementById('game-page');
         if (landingPageEl) landingPageEl.style.display = 'none';
         if (gamePageEl) gamePageEl.style.display = 'flex';
 
         mainRenderer = MultiplayerRenderer.create('mp-canvas', 'opponent-canvas', GameCore);
+        console.log('[Multiplayer] Renderer created');
 
         syncEngine = SyncEngine.create({
             roomCode, roomId: null, playerId,
             otherPlayerId: otherPlayerId || null, supabaseClient: SupabaseClient
         });
         syncEngine.start();
+        console.log('[Multiplayer] SyncEngine started');
 
         syncEngine.on(
             (state) => {
@@ -110,9 +117,11 @@ const MultiplayerGameController = (() => {
     }
 
     function _startGameIfReady(roomData) {
+        console.log('[Multiplayer] _startGameIfReady called:', { roomData: roomData?.status, gameStarted, myRole });
         if (!roomData || gameStarted) return;
         if (roomData.status !== 'playing' && !(myRole === 'host' && roomData.status === 'waiting')) return;
 
+        console.log('[Multiplayer] Starting game for', myRole, 'in room', roomData.id);
         gameStarted = true;
         if (roomData.id) syncEngine.updateRoomId(roomData.id);
 
@@ -126,9 +135,11 @@ const MultiplayerGameController = (() => {
     }
 
     async function createRoomAndStart(roomCode, hostId) {
+        console.log('[Multiplayer] createRoomAndStart called:', { roomCode, hostId });
         const result = await SupabaseClient.createRoom(roomCode, hostId);
+        console.log('[Multiplayer] createRoom result:', { error: result.error, room: result.room });
         if (result.error) {
-            console.error('[MultiplayerController] Create room error:', result.error);
+            console.error('[Multiplayer] Create room error:', result.error);
             showMPError('創建房間失敗：' + result.error);
             return;
         }
@@ -137,13 +148,16 @@ const MultiplayerGameController = (() => {
         updateMatchUI(result.room, hostId, roomCode);
         const roomDisplay = document.getElementById('mp-room-display');
         if (roomDisplay) roomDisplay.textContent = roomCode;
+        console.log('[Multiplayer] Calling _startGameIfReady for host');
         _startGameIfReady(result.room);
     }
 
     async function joinExistingRoom(roomCode, guestId) {
+        console.log('[Multiplayer] joinExistingRoom called:', { roomCode, guestId });
         const result = await SupabaseClient.joinRoom(roomCode, guestId);
+        console.log('[Multiplayer] joinRoom result:', { error: result.error, room: result.room });
         if (result.error) {
-            console.error('[MultiplayerController] Join room error:', result.error);
+            console.error('[Multiplayer] Join room error:', result.error);
             showMPError('加入房間失敗：' + result.error);
             return;
         }
@@ -151,6 +165,7 @@ const MultiplayerGameController = (() => {
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, guestId, roomCode);
         syncEngine.updateOtherPlayerId(result.room.host_id);
+        console.log('[Multiplayer] Calling _startGameIfReady for guest');
         _startGameIfReady(result.room);
     }
 

@@ -97,12 +97,8 @@ const SyncEngine = (() => {
 
             roomSub = SupabaseClient.subscribeToRoom(roomCode, (roomData) => {
                 ownRoomData = roomData;
+                console.log('[SyncEngine] Room update:', roomData?.status, 'guest_id:', roomData?.guest_id);
                 if (onRoomStatusChange) onRoomStatusChange(roomData);
-
-                // Detect disconnect: opponent ID doesn't match
-                if (ownRoomData && ownRoomData.guest_id !== otherPlayerId) {
-                    if (onOpponentDisconnected) onOpponentDisconnected();
-                }
             });
         }
 
