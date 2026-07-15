@@ -301,8 +301,7 @@ const MultiplayerGameController = (() => {
             }
         );
 
-        // Initialize game (creates room or joins room)
-        initGame(roomCode, playerId, role);
+        // Host room already created via createRoomAndStart(); guest joins via initGame below.
 
         // Keyboard controls
         setupMultiplayerControls();
