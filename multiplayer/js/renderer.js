@@ -22,7 +22,7 @@ const MultiplayerRenderer = (() => {
         const COLS = gameCore.COLS;
         const ROWS = gameCore.ROWS;
         const EMPTY = gameCore.EMPTY;
-        const PIECES = gameCore.PIECES_CONST();
+        const PIECES = gameCore.PIECES;
 
         // ============ BLOCK RENDERING ============
         function drawBlock(ctx, x, y, color, size) {

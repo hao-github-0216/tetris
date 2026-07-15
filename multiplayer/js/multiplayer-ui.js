@@ -189,7 +189,10 @@ const MultiplayerGameController = (() => {
         syncEngine.updateOtherPlayerId(result.room.host_id);
     }
 
-    // ============ LANDING / LOBBY UI ============
+
+    let myRoomCode = '';
+    let myPlayerId = '';
+
     function setupLandingUI() {
         const createBtn = document.getElementById('mp-create-room');
         const joinBtn = document.getElementById('mp-join-btn');
@@ -198,7 +201,9 @@ const MultiplayerGameController = (() => {
         if (createBtn) {
             createBtn.addEventListener('click', () => {
                 const { roomCode, playerId } = RoomSystem.createLocalRoom();
-                MultiplayerGameController.startGameLocally('host', roomCode, playerId);
+                myRoomCode = roomCode;
+                myPlayerId = playerId;
+                startGameLocally('host', roomCode, playerId);
             });
         }
 
@@ -210,10 +215,15 @@ const MultiplayerGameController = (() => {
                     return;
                 }
                 const { playerId } = RoomSystem.joinLocalRoom(roomCode);
-                MultiplayerGameController.startGameLocally('guest', roomCode, playerId);
+                myRoomCode = roomCode;
+                myPlayerId = playerId;
+                startGameLocally('guest', roomCode, playerId);
             });
         }
     }
+
+    function getMyRoomCode() { return myRoomCode; }
+    function getMyPlayerId() { return myPlayerId; }
 
     // ============ GAME UI SETUP ============
     function setupGameUI() {
