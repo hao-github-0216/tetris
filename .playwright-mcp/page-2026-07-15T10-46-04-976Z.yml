@@ -1,0 +1,21 @@
+- generic [ref=e2]:
+  - generic [ref=e3]: 俄羅斯方塊
+  - generic [ref=e4]: 雙人線上對戰
+  - generic [ref=e5]:
+    - button "🎮 創建房間 建立新房間，邀請朋友" [ref=e6] [cursor=pointer]:
+      - generic [ref=e7]: 🎮
+      - heading "創建房間" [level=3] [ref=e8]
+      - paragraph [ref=e9]: 建立新房間，邀請朋友
+    - button "🔗 加入房間 輸入房間碼加入對局" [ref=e10] [cursor=pointer]:
+      - generic [ref=e11]: 🔗
+      - heading "加入房間" [level=3] [ref=e12]
+      - paragraph [ref=e13]: 輸入房間碼加入對局
+  - generic [ref=e14]:
+    - heading "加入房間" [level=3] [ref=e15]
+    - generic [ref=e16]:
+      - textbox "TET7A3" [ref=e17]
+      - button "加入" [ref=e18] [cursor=pointer]
+  - paragraph [ref=e19]:
+    - link "← 返回單人模式" [ref=e20] [cursor=pointer]:
+      - /url: ../index.html
+  - button "⚙️ 設定 Supabase" [ref=e21] [cursor=pointer]

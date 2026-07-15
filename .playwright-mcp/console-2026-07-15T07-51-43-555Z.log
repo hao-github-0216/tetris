@@ -1,0 +1,2 @@
+[     502ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://tetris-ruby-three.vercel.app/multiplayer/index.html:0
+[     531ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://tetris-ruby-three.vercel.app/favicon.ico:0

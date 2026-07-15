@@ -57,20 +57,20 @@ const MultiplayerGameController = (() => {
         setupGameUI();
     }
 
-    /**
-     * 在當前頁面直接啟動遊戲（不導航）
-     * 用於 Landing Page 創建/加入房間後直接開始遊戲
-     */
-    function startGameLocally(role, roomCode, playerId, otherPlayerId) {
-        // Stop any existing landing UI event listeners
+    async function startGameLocally(role, roomCode, playerId, otherPlayerId) {
         gameStarted = false;
 
-        // Initialize Supabase (async — SDK loads from CDN)
+        // Must wait for SDK before calling createRoom / joinRoom (race condition fix)
         const SUPABASE_URL = document.body.dataset.supabaseUrl || '';
         const SUPABASE_ANON_KEY = document.body.dataset.supabaseAnonKey || '';
 
         if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-            SupabaseClient.init(SUPABASE_URL, SUPABASE_ANON_KEY);
+            try {
+                await SupabaseClient.init(SUPABASE_URL, SUPABASE_ANON_KEY);
+            } catch (e) {
+                showMPError('無法連線至伺服器：' + e);
+                return;
+            }
         }
 
         // Show game page, hide landing page
@@ -120,30 +120,29 @@ const MultiplayerGameController = (() => {
                     syncEngine.updateOtherPlayerId(roomData.guest_id);
                 }
 
-                // When room transitions to 'playing' (or host's 'waiting'), start the game (once)
-                if (roomData && ((roomData.status === 'playing') || (myRole === 'host' && roomData.status === 'waiting')) && !gameStarted) {
-                    gameStarted = true;
-                    if (roomData.id) {
-                        syncEngine.updateRoomId(roomData.id);
-                    }
-                    const state = GameCore.createEmptyState();
-                    state.gameState = 'playing';
-                    state.roomCode = roomCode;
-                    state.playerId = playerId;
-                    state.role = myRole;
-                    GameCore.spawnPiece(state);
-                    startGameLoop(state);
-                }
-            },
-            () => {
-                // Error callback
-                const gameOverEl = document.getElementById('mp-game-over');
-                if (gameOverEl) {
-                    gameOverEl.textContent = '連線錯誤，請重新加入房間';
-                    gameOverEl.style.display = 'block';
-                }
+        // When room transitions to 'playing' (or host's 'waiting'), start the game (once)
+        if (roomData && ((roomData.status === 'playing') || (myRole === 'host' && roomData.status === 'waiting')) && !gameStarted) {
+            gameStarted = true;
+            if (roomData.id) {
+                syncEngine.updateRoomId(roomData.id);
             }
-        );
+            const state = GameCore.createEmptyState();
+            state.gameState = 'playing';
+            state.roomCode = roomCode;
+            state.playerId = playerId;
+            state.role = myRole;
+            GameCore.spawnPiece(state);
+            startGameLoop(state);
+        }
+    },
+    () => {
+        const gameOverEl = document.getElementById('mp-game-over');
+        if (gameOverEl) {
+            gameOverEl.textContent = '連線錯誤，請重新加入房間';
+            gameOverEl.style.display = 'block';
+        }
+    }
+);
 
         // Hide settings panel
         const settingsPanel = document.getElementById('settings-panel');
@@ -171,6 +170,9 @@ const MultiplayerGameController = (() => {
         currentRoomData = result.room;
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, hostId, roomCode);
+        // Display room code for host to share
+        const roomDisplay = document.getElementById('mp-room-display');
+        if (roomDisplay) roomDisplay.textContent = roomCode;
     }
 
     /**
@@ -199,16 +201,16 @@ const MultiplayerGameController = (() => {
         const roomCodeInput = document.getElementById('mp-room-code-input');
 
         if (createBtn) {
-            createBtn.addEventListener('click', () => {
+            createBtn.addEventListener('click', async () => {
                 const { roomCode, playerId } = RoomSystem.createLocalRoom();
                 myRoomCode = roomCode;
                 myPlayerId = playerId;
-                startGameLocally('host', roomCode, playerId);
+                await MultiplayerGameController.startGameLocally('host', roomCode, playerId);
             });
         }
 
         if (joinBtn && roomCodeInput) {
-            joinBtn.addEventListener('click', () => {
+            joinBtn.addEventListener('click', async () => {
                 const roomCode = roomCodeInput.value.trim().toUpperCase();
                 if (!RoomSystem.validateRoomCode(roomCode)) {
                     showMPError('請輸入有效的房間碼');
@@ -217,7 +219,7 @@ const MultiplayerGameController = (() => {
                 const { playerId } = RoomSystem.joinLocalRoom(roomCode);
                 myRoomCode = roomCode;
                 myPlayerId = playerId;
-                startGameLocally('guest', roomCode, playerId);
+                await MultiplayerGameController.startGameLocally('guest', roomCode, playerId);
             });
         }
     }

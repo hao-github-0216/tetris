@@ -26,34 +26,36 @@ const SupabaseClient = (() => {
     function init(url, key) {
         if (!url || !key) {
             console.warn('[SupabaseClient] 未提供 URL 或 key，多人模式將無法使用');
-            return false;
+            return Promise.reject('Missing URL or key');
         }
 
-        try {
-            const role = decodeRole(key);
-            console.log('[SupabaseClient] key role:', role);
+        if (supabase) {
+            try {
+                supabase = window.supabase.createClient(url, key);
+                return Promise.resolve();
+            } catch (e) {
+                return Promise.reject(e);
+            }
+        }
 
-            // Dynamically load Supabase JS SDK v2
+        console.log('[SupabaseClient] 開始載入 Supabase SDK...');
+
+        return new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
             script.onload = () => {
                 // @ts-ignore — supabase is loaded from CDN
                 supabase = window.supabase.createClient(url, key);
                 isConnected = true;
-                if (role === 'service_role') {
-                    console.log('[SupabaseClient] 使用 service_role key（具備完整寫入權限）');
-                }
-                console.log('[SupabaseClient] 已連線至 Supabase');
+                console.log('[SupabaseClient] SDK 載入完成');
+                resolve();
             };
             script.onerror = () => {
                 console.error('[SupabaseClient] 載入 Supabase SDK 失敗');
+                reject(new Error('Failed to load Supabase SDK'));
             };
             document.head.appendChild(script);
-            return true;
-        } catch (e) {
-            console.error('[SupabaseClient] 初始化失敗:', e);
-            return false;
-        }
+        });
     }
 
     function getClient() {
@@ -97,12 +99,12 @@ const SupabaseClient = (() => {
     async function joinRoom(roomCode, guestId) {
         if (!supabase) return { error: 'Supabase 未初始化' };
 
-        // Find rooms with status 'waiting' and no guest yet
+        // Find rooms with status 'waiting' or 'playing' and no guest yet
         const { data: room, error } = await supabase
             .from('rooms')
             .select('*')
             .eq('room_code', roomCode.toUpperCase())
-            .eq('status', 'waiting')
+            .in('status', ['waiting', 'playing'])
             .is('guest_id', null)
             .single();
 
