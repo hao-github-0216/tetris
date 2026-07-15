@@ -3,8 +3,6 @@
  * 支援主面板（自己的遊戲）+ 副面板（對手的遊戲）
  */
 const MultiplayerRenderer = (() => {
-    const BLOCK_SIZE_DESKTOP = 30;
-
     /**
      * 建立渲染器實例
      * @param {string} mainCanvasId — 主 Canvas ID（自己的遊戲）
@@ -42,23 +40,21 @@ const MultiplayerRenderer = (() => {
         }
 
         function getBlockSize() {
-            if (window.matchMedia('(max-width: 600px)').matches) {
-                const vw = window.innerWidth;
-                const vh = window.innerHeight;
-                const bodyStyle = getComputedStyle(document.body);
-                const safeTop = parseFloat(bodyStyle.paddingTop) || 0;
-                const safeBottom = parseFloat(bodyStyle.paddingBottom) || 0;
-                const infoBarHeight = 20;
-                const previewsHeight = 60;
-                const controlsHeight = 36;
-                const totalReserved = infoBarHeight + previewsHeight + controlsHeight;
-                const availWidth = Math.min(vw - 16, 360);
-                const availHeight = Math.max(vh - totalReserved - safeTop - safeBottom, ROWS * 20);
-                const blockW = Math.floor(availWidth / COLS);
-                const blockH = Math.floor(availHeight / ROWS);
-                return Math.max(Math.min(blockW, blockH, 30), 20);
-            }
-            return BLOCK_SIZE_DESKTOP;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+
+            // Desktop: fixed 30px blocks
+            if (vw > 600) return 30;
+
+            // Mobile: maximize to fill available width
+            const safeTop = parseFloat(getComputedStyle(document.body).paddingTop) || 0;
+            const safeBottom = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+            const reserved = 120; // top bar + touch controls + stats
+            const availWidth = Math.min(vw - 16, 400);
+            const availHeight = Math.max(vh - reserved - safeTop - safeBottom, ROWS * 25);
+            const blockW = Math.floor(availWidth / COLS);
+            const blockH = Math.floor(availHeight / ROWS);
+            return Math.max(Math.min(blockW, blockH, 30), 20);
         }
 
         // ============ MAIN BOARD RENDERING ============
