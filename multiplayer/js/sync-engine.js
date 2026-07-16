@@ -5,9 +5,10 @@
  */
 const SyncEngine = (() => {
     const INPUT_INTERVAL_MS = 100;    // 每 100ms 發送一次輸入
-    const STATE_POLL_MS = 200;        // 每 200ms 拉取權威狀態
     const INPUT_CONSUME_MS = 150;     // 每 150ms 消費一次輸入
     const MAX_INPUTS_QUEUED = 5;      // 最多排隊 5 個未處理輸入
+    const HEARTBEAT_INTERVAL_MS = 5000; // 心跳間隔
+    const MAX_HEARTBEAT_FAILURES = 5;   // 連續失敗 5 次後判定斷線 (~25秒)
 
     /**
      * 建立同步器實例
@@ -43,8 +44,9 @@ const SyncEngine = (() => {
         let inputQueue = [];
         let lastInputTime = 0;
 
-        // Track processed guest inputs on host side
-        let processedGuestVersions = new Set();
+        // Track processed guest inputs on host side (bounded to prevent memory leak)
+        let processedGuestVersions = [];
+        const MAX_PROCESSED_RECORDS = 100;
 
         // Callbacks (set by the game controller)
         let onOtherStateUpdate = null;
@@ -53,6 +55,10 @@ const SyncEngine = (() => {
         let onGameStarted = null;
         let onGameStateSynced = null;
         let onGameInput = null;
+
+        // Heartbeat & disconnect tracking
+        let consecutiveHeartbeatFailures = 0;
+        let lastOpponentActivityTime = Date.now();
 
         // ============ BROADCAST MY STATE (Host → Guest) ============
         function broadcastMyState(gameState) {
@@ -95,17 +101,46 @@ const SyncEngine = (() => {
         }
 
         // ============ SUBSCRIBE TO OTHER PLAYER ============
-        function subscribeToOtherPlayer() {
+        function subscribeToOtherPlayer(otherPlayerId) {
             if (!supabaseClient.isConnectedState() || !roomId) return;
 
-            stateSub = supabaseClient.subscribeToRoomStates(
-                roomId, (payload) => {
-                    if (!payload || !payload.snapshot) return;
-                    const state = GameStateSerializer.deserialize(payload.snapshot);
-                    authoritativeState = state;
-                    if (onOtherStateUpdate) onOtherStateUpdate(state);
-                }
-            );
+            // Clean old subscription before creating new one
+            if (stateSub) {
+                try {
+                    const client = supabaseClient.getClient();
+                    if (client && client.channel) {
+                        try { client.channel(stateSub.id)?.unsubscribe?.(); } catch(e) {}
+                    }
+                } catch(e) {}
+                stateSub = null;
+            }
+
+            if (otherPlayerId) {
+                // Precise filter: only receive updates from the specific opponent
+                stateSub = supabaseClient.subscribeToOtherPlayerState(
+                    roomId, otherPlayerId, (payload) => {
+                        if (!payload || !payload.snapshot) return;
+                        lastOpponentActivityTime = Date.now();
+                        consecutiveHeartbeatFailures = 0; // Reset on any successful activity
+                        const state = GameStateSerializer.deserialize(payload.snapshot);
+                        authoritativeState = state;
+                        if (onOtherStateUpdate) onOtherStateUpdate(state);
+                    }
+                );
+            } else {
+                // Fallback: broad filter (used during initialization before we know opponent ID)
+                stateSub = supabaseClient.subscribeToRoomStates(
+                    roomId, (payload) => {
+                        if (!payload || !payload.snapshot) return;
+                        // Skip own snapshots
+                        if (payload.player_id === playerId) return;
+                        lastOpponentActivityTime = Date.now();
+                        const state = GameStateSerializer.deserialize(payload.snapshot);
+                        authoritativeState = state;
+                        if (onOtherStateUpdate) onOtherStateUpdate(state);
+                    }
+                );
+            }
         }
 
         // ============ SUBSCRIBE TO ROOM ============
@@ -120,7 +155,7 @@ const SyncEngine = (() => {
         }
 
         // ============ UPDATE ROOM ID ============
-        function updateRoomId(newRoomId) {
+        function updateRoomId(newRoomId, otherPlayerId) {
             // Clean old subscription before creating new one
             if (stateSub) {
                 try {
@@ -135,7 +170,7 @@ const SyncEngine = (() => {
             console.log('[SyncEngine] 房間 ID 更新為:', roomId);
 
             // Re-subscribe to other player state with new room ID
-            subscribeToOtherPlayer();
+            subscribeToOtherPlayer(otherPlayerId);
         }
 
         // ============ START / STOP ============
@@ -145,31 +180,33 @@ const SyncEngine = (() => {
             subscribeToRoom();
 
             if (role === 'guest') {
-                // Guest: poll for authoritative state periodically
-                statePollTimer = setInterval(() => {
-                    if (!roomId || !supabaseClient.isConnectedState()) return;
-                    supabaseClient.getLatestState(roomId)
-                        .then(result => {
-                            if (result.state && result.state.player_id !== playerId) {
-                                const state = GameStateSerializer.deserialize(result.state.snapshot);
-                                authoritativeState = state;
-                                if (onOtherStateUpdate) onOtherStateUpdate(state);
-                            }
-                        })
-                        .catch(err => console.warn('[SyncEngine] 取得最新狀態失敗:', err));
-                }, STATE_POLL_MS);
+                // Guest: rely on Realtime subscription for state updates.
+                // No polling timer needed — the subscription pushes state changes immediately.
                 
-                // Heartbeat to detect disconnected players (every 5 seconds)
+                // Heartbeat + opponent disconnection detection (every 5 seconds)
                 heartbeatTimer = setInterval(() => {
                     if (!roomId || !supabaseClient.isConnectedState()) return;
                     supabaseClient.sendPlayerInput(roomId, playerId, 'heartbeat', lastVersion)
-                        .catch(() => {}); // Silently fail — don't clog input queue
-                }, 5000);
+                        .then(() => {
+                            consecutiveHeartbeatFailures = 0;
+                        })
+                        .catch(() => {
+                            consecutiveHeartbeatFailures++;
+                            if (consecutiveHeartbeatFailures >= MAX_HEARTBEAT_FAILURES) {
+                                console.warn('[SyncEngine] 連線中斷，對手可能已離線');
+                                if (onOpponentDisconnected) onOpponentDisconnected();
+                            }
+                        });
+                }, HEARTBEAT_INTERVAL_MS);
             } else if (role === 'host') {
                 inputConsumeTimer = setInterval(() => {
                     if (!roomId || !supabaseClient.isConnectedState()) return;
                     consumeGuestInputs();
                 }, INPUT_CONSUME_MS);
+
+                // Host: monitor opponent activity via realtime updates
+                // If no activity from opponent for 15+ seconds, they may be disconnected
+                // (tracked via lastOpponentActivityTime updated in subscribeToOtherPlayer)
             }
         }
 
@@ -180,6 +217,11 @@ const SyncEngine = (() => {
             if (statePollTimer) { clearInterval(statePollTimer); statePollTimer = null; }
             if (inputConsumeTimer) { clearInterval(inputConsumeTimer); inputConsumeTimer = null; }
             if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+
+            // Clear processed versions to prevent memory leak
+            processedGuestVersions.length = 0;
+            consecutiveHeartbeatFailures = 0;
+            lastOpponentActivityTime = Date.now();
 
             if (roomSub) {
                 try { supabaseClient.getClient()?.channel(roomSub.id)?.unsubscribe?.(); } catch(e) {}
@@ -227,9 +269,13 @@ const SyncEngine = (() => {
             }
 
             for (const input of result.inputs) {
-                // Deduplicate by input row ID (not version) since Supabase neq(array) is broken
-                if (!processedGuestVersions.has(input.id)) {
-                    processedGuestVersions.add(input.id);
+                // Deduplicate by input row ID (bounded array instead of unbounded Set)
+                if (!processedGuestVersions.includes(input.id)) {
+                    processedGuestVersions.push(input.id);
+                    // Keep only recent records to prevent memory leak
+                    if (processedGuestVersions.length > MAX_PROCESSED_RECORDS) {
+                        processedGuestVersions = processedGuestVersions.slice(-MAX_PROCESSED_RECORDS);
+                    }
                     if (onGameInput) {
                         onGameInput(input.input_type, input.room_id);
                     }

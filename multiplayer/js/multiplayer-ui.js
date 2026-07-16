@@ -97,6 +97,10 @@ const MultiplayerGameController = (() => {
         syncEngine.on(
             (state) => {
                 if (state) {
+                    // Skip own state — we get our own snapshots from the room_states table
+                    // but we should never apply them back to ourselves
+                    if (state.player_id === myPlayerId) return;
+
                     // Apply authoritative state to our own state for rendering
                     if (myRole === 'guest') {
                         // Guest: Host's state IS our state — apply directly
@@ -115,8 +119,8 @@ const MultiplayerGameController = (() => {
                             currentState.heldPiece = newState.heldPiece;
                             currentState.hasHeld = newState.hasHeld;
                             currentState.gameState = newState.gameState;
-                            currentState._lastClearedCount = newState._lastClearedCount;
-                            currentState._comboCount = newState._comboCount;
+                            currentState._lastClearedCount = newState._lastClearedCount ?? currentState._lastClearedCount;
+                            currentState._comboCount = newState._comboCount ?? currentState._comboCount;
                         }
                     } else {
                         // Host: track opponent state separately
@@ -135,8 +139,11 @@ const MultiplayerGameController = (() => {
             (roomData) => {
                 currentRoomData = roomData;
                 updateMatchUI(roomData, playerId, roomCode);
+                // When host detects guest, update sync engine with precise player ID
                 if (myRole === 'host' && roomData && roomData.guest_id) {
                     console.log('[Multiplayer] Host detected guest:', roomData.guest_id);
+                    // Re-subscribe with precise guest player ID filter
+                    syncEngine.updateRoomId(currentRoomData?.id, roomData.guest_id);
                 }
             },
             () => {
@@ -169,6 +176,7 @@ const MultiplayerGameController = (() => {
             return;
         }
         currentRoomData = result.room;
+        // Pass null since we don't know guest_id yet — will update once detected
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, hostId, roomCode);
         
@@ -198,27 +206,14 @@ const MultiplayerGameController = (() => {
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, guestId, roomCode);
         
-        // Immediately fetch the host's current state to avoid waiting for first poll
+        // Immediately fetch the host's current state and pass it to the render loop
         console.log('[Multiplayer] Fetching initial host state...');
+        let hostState = null;
         try {
             const latestStateResult = await SupabaseClient.getLatestState(result.room.id);
             if (latestStateResult.state && latestStateResult.state.player_id !== myPlayerId) {
-                const initialState = GameCore.deserialize(latestStateResult.state.snapshot);
-                if (currentState) {
-                    currentState.board = initialState.board;
-                    currentState.currentPiece = initialState.currentPiece;
-                    currentState.nextPieceType = initialState.nextPieceType;
-                    currentState.score = initialState.score;
-                    currentState.level = initialState.level;
-                    currentState.linesCleared = initialState.linesCleared;
-                    currentState.bag = initialState.bag;
-                    currentState.heldPiece = initialState.heldPiece;
-                    currentState.hasHeld = initialState.hasHeld;
-                    currentState.gameState = initialState.gameState;
-                    currentState._lastClearedCount = initialState._lastClearedCount;
-                    currentState._comboCount = initialState._comboCount;
-                    console.log('[Multiplayer] Initial state fetched, board rows:', initialState.board.length);
-                }
+                hostState = GameCore.deserialize(latestStateResult.state.snapshot);
+                console.log('[Multiplayer] Initial state fetched, board rows:', hostState?.board?.length);
             }
         } catch (e) {
             console.warn('[Multiplayer] Failed to fetch initial state:', e);
@@ -226,26 +221,36 @@ const MultiplayerGameController = (() => {
         
         // Guest: start a lightweight game loop to render Host's authoritative state
         console.log('[Multiplayer] Guest starting render loop');
-        startGuestRenderLoop(result.room);
+        startGuestRenderLoop(hostState);
     }
 
-    function startGuestRenderLoop(roomData) {
-        console.log('[Multiplayer] ✅ Starting guest render loop in room', roomData.id);
+    let initialSyncTimeout = null;
+
+    function clearInitialSyncTimeout() {
+        if (initialSyncTimeout) {
+            clearTimeout(initialSyncTimeout);
+            initialSyncTimeout = null;
+        }
+    }
+
+    function startGuestRenderLoop(hostState) {
+        console.log('[Multiplayer] ✅ Starting guest render loop in room', hostState?.id);
         gameStarted = true;
 
-        // Create empty state for rendering
-        const state = GameCore.createEmptyState();
-        state.gameState = 'playing';
-        state.roomCode = myRoomCode;
-        state.playerId = myPlayerId;
-        state.role = myRole;
-        
-        // Spawn a piece so the guest's board renders content immediately
-        GameCore.spawnPiece(state);
-        
-        currentState = state;
+        // Guest uses host's state as source of truth — no local game state needed
+        // hostState may be null if host hasn't sent anything yet
+        currentState = hostState || GameCore.createEmptyState();
 
-        startGameLoop(state);
+        // Set initial sync timeout: if we don't receive host state within 3 seconds,
+        // show a message indicating the connection may have issues
+        initialSyncTimeout = setTimeout(() => {
+            if (myRole === 'guest' && (!currentState || !currentState.currentPiece)) {
+                const el = document.getElementById('mp-message');
+                if (el) { el.textContent = '連接對手逾時，請確認對方仍在遊戲中'; el.style.display = 'block'; }
+            }
+        }, 3000);
+
+        startGameLoop(currentState);
     }
 
     function startHostGame(roomData) {
@@ -295,12 +300,18 @@ const MultiplayerGameController = (() => {
         syncEngine.on(
             (state) => {
                 if (state) {
+                    // Skip own state — we get our own snapshots from the room_states table
+                    // but we should never apply them back to ourselves
+                    if (state.player_id === myPlayerId) return;
+
                     // Apply authoritative state to our own state for rendering
                     if (myRole === 'guest') {
                         // Guest: Host's state IS our state — apply directly
                         const newState = GameCore.deserialize(GameCore.serialize(state));
                         if (!currentState) {
                             currentState = newState;
+                            // First state arrived — clear sync timeout
+                            clearInitialSyncTimeout();
                         } else {
                             // Deep merge: keep own metadata, overwrite game data
                             currentState.board = newState.board;
@@ -313,8 +324,8 @@ const MultiplayerGameController = (() => {
                             currentState.heldPiece = newState.heldPiece;
                             currentState.hasHeld = newState.hasHeld;
                             currentState.gameState = newState.gameState;
-                            currentState._lastClearedCount = newState._lastClearedCount;
-                            currentState._comboCount = newState._comboCount;
+                            currentState._lastClearedCount = newState._lastClearedCount ?? currentState._lastClearedCount;
+                            currentState._comboCount = newState._comboCount ?? currentState._comboCount;
                         }
                     } else {
                         // Host: track opponent state separately
@@ -333,8 +344,10 @@ const MultiplayerGameController = (() => {
             (roomData) => {
                 currentRoomData = roomData;
                 updateMatchUI(roomData, playerId, roomCode);
+                // When host detects guest, update sync engine with precise player ID
                 if (myRole === 'host' && roomData && roomData.guest_id) {
                     console.log('[Multiplayer] setupGameUI: Host detected guest:', roomData.guest_id);
+                    syncEngine.updateRoomId(currentRoomData?.id, roomData.guest_id);
                 }
             },
             () => {
@@ -356,54 +369,36 @@ const MultiplayerGameController = (() => {
             await joinExistingRoom(roomCode, playerId);
         }
 
-        // Immediately fetch the host's current state for direct URL navigation path
-        console.log('[Multiplayer] Fetching initial host state for direct navigation...');
-        try {
-            const latestStateResult = await SupabaseClient.getLatestState(currentRoomData.id);
-            if (latestStateResult.state && latestStateResult.state.player_id !== myPlayerId) {
-                const initialState = GameCore.deserialize(latestStateResult.state.snapshot);
-                if (currentState) {
-                    currentState.board = initialState.board;
-                    currentState.currentPiece = initialState.currentPiece;
-                    currentState.nextPieceType = initialState.nextPieceType;
-                    currentState.score = initialState.score;
-                    currentState.level = initialState.level;
-                    currentState.linesCleared = initialState.linesCleared;
-                    currentState.bag = initialState.bag;
-                    currentState.heldPiece = initialState.heldPiece;
-                    currentState.hasHeld = initialState.hasHeld;
-                    currentState.gameState = initialState.gameState;
-                    currentState._lastClearedCount = initialState._lastClearedCount;
-                    currentState._comboCount = initialState._comboCount;
-                    console.log('[Multiplayer] Initial state fetched via direct nav, board rows:', initialState.board.length);
-                }
-            }
-        } catch (e) {
-            console.warn('[Multiplayer] Failed to fetch initial state for direct nav:', e);
-        }
+        // No duplicate fetch needed — joinExistingRoom already fetches initial state
+        // and sets up the render loop. This avoids a redundant getLatestState call.
 
         setupMultiplayerControls();
     }
 
     // ============ GAME LOOP ============
-    function startGameLoop(state) {
-        currentState = state;
+    function startGameLoop(initialState) {
+        currentState = initialState;
 
         function gameLoop(timestamp) {
             try {
+                // Guest: no per-frame polling needed — rely on Realtime subscription.
+                // The sync-engine pushes state updates via subscribeToOtherPlayerState,
+                // which updates authoritativeState and triggers onOtherStateUpdate callback.
+
                 // Only Host drives game simulation. Guest is render-only.
-                if (myRole === 'host' && state.currentPiece && state.gameState === 'playing') {
-                    if (!state._lastDropTime) state._lastDropTime = timestamp;
-                    const dropInterval = GameCore.getDropInterval(state.level);
-                    const elapsed = timestamp - state._lastDropTime;
+                let renderState = currentState;
+                if (myRole === 'host' && renderState.currentPiece && renderState.gameState === 'playing') {
+                    if (!renderState._lastDropTime) renderState._lastDropTime = timestamp;
+                    const dropInterval = GameCore.getDropInterval(renderState.level);
+                    const elapsed = timestamp - renderState._lastDropTime;
                     if (elapsed >= dropInterval) {
-                        handleAutoDrop(state);
-                        state._lastDropTime = timestamp;
+                        handleAutoDrop(renderState);
+                        renderState._lastDropTime = timestamp;
                     }
                 }
 
                 const opponentSnapshot = syncEngine.getAuthoritativeState();
-                mainRenderer.render(state, opponentSnapshot);
+                mainRenderer.render(renderState, opponentSnapshot);
             } catch (e) {
                 console.error('[Multiplayer] Game loop error:', e);
                 stopGameLoop();
@@ -562,6 +557,7 @@ const MultiplayerGameController = (() => {
     function stopGameLoop() {
         if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null; }
         if (syncEngine) { syncEngine.stop(); syncEngine = null; }
+        clearInitialSyncTimeout();
     }
 
     return { init, startGameLocally };
