@@ -76,7 +76,14 @@ const MultiplayerGameController = (() => {
 
         // Immediately show the room code so user can share it
         const roomDisplay = document.getElementById('mp-room-display');
-        if (roomDisplay) roomDisplay.textContent = myRoomCode;
+        console.log('[Multiplayer] Room display element found:', roomDisplay !== null);
+        console.log('[Multiplayer] Setting room code:', myRoomCode);
+        if (roomDisplay) {
+            roomDisplay.textContent = myRoomCode;
+            console.log('[Multiplayer] Room code set successfully');
+        } else {
+            console.error('[Multiplayer] ERROR: roomDisplay element not found!');
+        }
 
         mainRenderer = MultiplayerRenderer.create('mp-canvas', 'opponent-canvas', GameCore);
         console.log('[Multiplayer] Renderer created');
@@ -503,9 +510,12 @@ const MultiplayerGameController = (() => {
 
 // ============ GLOBAL HANDLERS FOR HTML onclick ============
 window._mpHandleCreateRoom = function() {
+    console.log('[Global] Creating room...');
     try {
         const { roomCode, playerId } = RoomSystem.createLocalRoom();
+        console.log('[Global] Room created:', { roomCode, playerId });
         MultiplayerGameController.startGameLocally('host', roomCode, playerId);
+        console.log('[Global] startGameLocally called');
     } catch (e) {
         console.error('[Global] Error creating room:', e);
         alert('創建房間失敗：' + e.message);
