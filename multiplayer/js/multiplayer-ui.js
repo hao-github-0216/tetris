@@ -179,18 +179,11 @@ const MultiplayerGameController = (() => {
         // Pass null since we don't know guest_id yet — will update once detected
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, hostId, roomCode);
-        
+
         // Host starts game immediately after creating room
+        // The game loop will persist initial state via broadcastMyState()
         console.log('[Multiplayer] Host starting game loop after room creation');
         startHostGame(result.room);
-        
-        // Immediately broadcast initial state so Guests don't wait for first auto-drop
-        setTimeout(() => {
-            if (syncEngine && currentState) {
-                syncEngine.broadcastMyState(currentState);
-                console.log('[Multiplayer] Host initial state broadcast sent');
-            }
-        }, 100);
     }
 
     async function joinExistingRoom(roomCode, guestId) {
@@ -205,20 +198,34 @@ const MultiplayerGameController = (() => {
         currentRoomData = result.room;
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, guestId, roomCode);
-        
-        // Immediately fetch the host's current state and pass it to the render loop
+
+        // Poll for host state with retry — host may not have persisted yet
         console.log('[Multiplayer] Fetching initial host state...');
         let hostState = null;
-        try {
-            const latestStateResult = await SupabaseClient.getLatestState(result.room.id);
-            if (latestStateResult.state && latestStateResult.state.player_id !== myPlayerId) {
-                hostState = GameCore.deserialize(latestStateResult.state.snapshot);
-                console.log('[Multiplayer] Initial state fetched, board rows:', hostState?.board?.length);
+        const maxRetries = 8;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                const latestStateResult = await SupabaseClient.getLatestState(result.room.id);
+                if (latestStateResult.state && latestStateResult.state.player_id !== myPlayerId) {
+                    hostState = GameCore.deserialize(latestStateResult.state.snapshot);
+                    console.log('[Multiplayer] Initial state fetched on attempt', attempt + 1, ', board rows:', hostState?.board?.length);
+                    break;
+                }
+            } catch (e) {
+                console.warn('[Multiplayer] Fetch attempt', attempt + 1, 'failed:', e);
             }
-        } catch (e) {
-            console.warn('[Multiplayer] Failed to fetch initial state:', e);
+            // Wait before retrying (50ms → 400ms exponential backoff)
+            if (attempt < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 50 * Math.pow(2, attempt)));
+            }
         }
-        
+
+        if (!hostState) {
+            console.error('[Multiplayer] Failed to fetch host state after', maxRetries, 'attempts');
+            showMPMessage('無法取得對手狀態，請重試');
+            return;
+        }
+
         // Guest: start a lightweight game loop to render Host's authoritative state
         console.log('[Multiplayer] Guest starting render loop');
         startGuestRenderLoop(hostState);
@@ -257,6 +264,7 @@ const MultiplayerGameController = (() => {
         console.log('[Multiplayer] ✅ Starting game for host in room', roomData.id);
         gameStarted = true;
 
+        // Initialize game state (host drives simulation)
         const state = GameCore.createEmptyState();
         state.gameState = 'playing';
         state.roomCode = myRoomCode;
@@ -264,6 +272,12 @@ const MultiplayerGameController = (() => {
         state.role = myRole;
         GameCore.spawnPiece(state);
         startGameLoop(state);
+
+        // Persist initial state to DB immediately — guest may join before any auto-drop
+        if (syncEngine && currentState) {
+            syncEngine.broadcastMyState(currentState);
+            console.log('[Multiplayer] Host initial state broadcast sent');
+        }
     }
 
     function getMyRoomCode() { return myRoomCode; }
@@ -460,18 +474,13 @@ const MultiplayerGameController = (() => {
             case 'rotate': GameCore.tryRotate(currentState); break;
             case 'hard_drop':
                 GameCore.hardDrop(currentState);
-                const info = GameCore.commitHardDrop(currentState);
-                if (info.clearedCount > 0) {
-                    // Broadcast immediately so guest sees the clear
-                    syncEngine.broadcastMyState(currentState);
-                }
+                GameCore.commitHardDrop(currentState);
                 break;
             case 'hold':
                 GameCore.holdPiece(currentState);
-                // Broadcast handled below
                 break;
         }
-        // Broadcast final state after all input handling
+        // Always broadcast state after every input action so guest sees updates
         syncEngine.broadcastMyState(currentState);
     }
 
