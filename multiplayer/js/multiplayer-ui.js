@@ -198,6 +198,32 @@ const MultiplayerGameController = (() => {
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, guestId, roomCode);
         
+        // Immediately fetch the host's current state to avoid waiting for first poll
+        console.log('[Multiplayer] Fetching initial host state...');
+        try {
+            const latestStateResult = await SupabaseClient.getLatestState(result.room.id);
+            if (latestStateResult.state && latestStateResult.state.player_id !== myPlayerId) {
+                const initialState = GameCore.deserialize(latestStateResult.state.snapshot);
+                if (currentState) {
+                    currentState.board = initialState.board;
+                    currentState.currentPiece = initialState.currentPiece;
+                    currentState.nextPieceType = initialState.nextPieceType;
+                    currentState.score = initialState.score;
+                    currentState.level = initialState.level;
+                    currentState.linesCleared = initialState.linesCleared;
+                    currentState.bag = initialState.bag;
+                    currentState.heldPiece = initialState.heldPiece;
+                    currentState.hasHeld = initialState.hasHeld;
+                    currentState.gameState = initialState.gameState;
+                    currentState._lastClearedCount = initialState._lastClearedCount;
+                    currentState._comboCount = initialState._comboCount;
+                    console.log('[Multiplayer] Initial state fetched, board rows:', initialState.board.length);
+                }
+            }
+        } catch (e) {
+            console.warn('[Multiplayer] Failed to fetch initial state:', e);
+        }
+        
         // Guest: start a lightweight game loop to render Host's authoritative state
         console.log('[Multiplayer] Guest starting render loop');
         startGuestRenderLoop(result.room);
@@ -213,6 +239,10 @@ const MultiplayerGameController = (() => {
         state.roomCode = myRoomCode;
         state.playerId = myPlayerId;
         state.role = myRole;
+        
+        // Spawn a piece so the guest's board renders content immediately
+        GameCore.spawnPiece(state);
+        
         currentState = state;
 
         startGameLoop(state);
@@ -326,6 +356,32 @@ const MultiplayerGameController = (() => {
             await joinExistingRoom(roomCode, playerId);
         }
 
+        // Immediately fetch the host's current state for direct URL navigation path
+        console.log('[Multiplayer] Fetching initial host state for direct navigation...');
+        try {
+            const latestStateResult = await SupabaseClient.getLatestState(currentRoomData.id);
+            if (latestStateResult.state && latestStateResult.state.player_id !== myPlayerId) {
+                const initialState = GameCore.deserialize(latestStateResult.state.snapshot);
+                if (currentState) {
+                    currentState.board = initialState.board;
+                    currentState.currentPiece = initialState.currentPiece;
+                    currentState.nextPieceType = initialState.nextPieceType;
+                    currentState.score = initialState.score;
+                    currentState.level = initialState.level;
+                    currentState.linesCleared = initialState.linesCleared;
+                    currentState.bag = initialState.bag;
+                    currentState.heldPiece = initialState.heldPiece;
+                    currentState.hasHeld = initialState.hasHeld;
+                    currentState.gameState = initialState.gameState;
+                    currentState._lastClearedCount = initialState._lastClearedCount;
+                    currentState._comboCount = initialState._comboCount;
+                    console.log('[Multiplayer] Initial state fetched via direct nav, board rows:', initialState.board.length);
+                }
+            }
+        } catch (e) {
+            console.warn('[Multiplayer] Failed to fetch initial state for direct nav:', e);
+        }
+
         setupMultiplayerControls();
     }
 
@@ -398,6 +454,9 @@ const MultiplayerGameController = (() => {
 
     function applyInput(inputType) {
         if (!currentState || currentState.gameState !== 'playing' || !currentState.currentPiece) return;
+        
+        // Ignore heartbeat inputs — they're just for connection monitoring
+        if (inputType === 'heartbeat') return;
 
         switch (inputType) {
             case 'left': GameCore.move(currentState, -1, 0); break;

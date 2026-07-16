@@ -35,6 +35,7 @@ const SyncEngine = (() => {
         let inputTimer = null;
         let statePollTimer = null;
         let inputConsumeTimer = null;
+        let heartbeatTimer = null;
         let roomSub = null;
         let stateSub = null;
 
@@ -157,6 +158,13 @@ const SyncEngine = (() => {
                         })
                         .catch(err => console.warn('[SyncEngine] 取得最新狀態失敗:', err));
                 }, STATE_POLL_MS);
+                
+                // Heartbeat to detect disconnected players (every 5 seconds)
+                heartbeatTimer = setInterval(() => {
+                    if (!roomId || !supabaseClient.isConnectedState()) return;
+                    supabaseClient.sendPlayerInput(roomId, playerId, 'heartbeat', lastVersion)
+                        .catch(() => {}); // Silently fail — don't clog input queue
+                }, 5000);
             } else if (role === 'host') {
                 inputConsumeTimer = setInterval(() => {
                     if (!roomId || !supabaseClient.isConnectedState()) return;
@@ -171,6 +179,7 @@ const SyncEngine = (() => {
             if (inputTimer) { clearInterval(inputTimer); inputTimer = null; }
             if (statePollTimer) { clearInterval(statePollTimer); statePollTimer = null; }
             if (inputConsumeTimer) { clearInterval(inputConsumeTimer); inputConsumeTimer = null; }
+            if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
 
             if (roomSub) {
                 try { supabaseClient.getClient()?.channel(roomSub.id)?.unsubscribe?.(); } catch(e) {}

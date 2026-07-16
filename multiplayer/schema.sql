@@ -43,3 +43,21 @@ CREATE INDEX IF NOT EXISTS idx_rooms_code ON rooms(room_code);
 CREATE INDEX IF NOT EXISTS idx_states_room_id ON room_states(room_id);
 CREATE INDEX IF NOT EXISTS idx_states_player_id ON room_states(player_id);
 CREATE INDEX IF NOT EXISTS idx_states_version ON room_states(room_id, version DESC);
+
+-- ============================================
+-- 4. Player Inputs table (玩家輸入)
+-- 用於 Guest → Host 的輸入傳輸
+-- ============================================
+CREATE TABLE IF NOT EXISTS player_inputs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    player_id TEXT NOT NULL,
+    input_type TEXT NOT NULL CHECK (input_type IN ('left','right','down','rotate','hard_drop','hold')),
+    version INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 建立索引（加速查詢）
+CREATE INDEX IF NOT EXISTS idx_player_inputs_room_id ON player_inputs(room_id);
+CREATE INDEX IF NOT EXISTS idx_player_inputs_player_id ON player_inputs(player_id);
+CREATE INDEX IF NOT EXISTS idx_player_inputs_created_at ON player_inputs(created_at);
