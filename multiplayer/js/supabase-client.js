@@ -272,7 +272,7 @@ const SupabaseClient = (() => {
         return supabase
             .channel('room_states:' + roomId)
             .on('postgres_changes', {
-                event: 'UPDATE',
+                event: 'INSERT',
                 schema: 'public',
                 table: 'room_states',
                 filter: `room_id=eq.${roomId}`
@@ -328,6 +328,27 @@ const SupabaseClient = (() => {
     }
 
     /**
+     * 取得尚未處理的玩家輸入（Host 用）
+     * @param {string} roomId
+     * @param {string} otherPlayerId — 要讀取誰的輸入
+     * @param {number[]} processedVersions — 已經處理過的 version 列表（跳過這些）
+     */
+    async function getPendingInputs(roomId, otherPlayerId) {
+        if (!supabase) return { error: 'Supabase 未初始化', inputs: [] };
+
+        const { data, error } = await supabase
+            .from('player_inputs')
+            .select('*')
+            .eq('room_id', roomId)
+            .eq('player_id', otherPlayerId)
+            .order('created_at', { ascending: true })
+            .limit(10);
+
+        if (error) return { error: error.message, inputs: [] };
+        return { error: null, inputs: data || [] };
+    }
+
+    /**
      * 結束對局
      * @param {string} roomId
      * @param {string} status — 'finished' | 'error'
@@ -358,6 +379,7 @@ const SupabaseClient = (() => {
         subscribeToOtherPlayerState,
         getLatestState,
         sendPlayerInput,
+        getPendingInputs,
         finishRoom
     };
 })();

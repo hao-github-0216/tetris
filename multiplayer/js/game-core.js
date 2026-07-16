@@ -269,8 +269,6 @@ const GameCore = (() => {
         const count = clearedRows.length;
         if (count === 0) return { clearedRows: [], clearedCount: 0, points: 0 };
 
-        removeClearedRows(state, clearedRows);
-
         const points = LINE_POINTS[count] * state.level;
         state.score += points;
         state.linesCleared += count;

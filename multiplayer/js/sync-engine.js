@@ -6,6 +6,7 @@
 const SyncEngine = (() => {
     const INPUT_INTERVAL_MS = 100;    // 每 100ms 發送一次輸入
     const STATE_POLL_MS = 200;        // 每 200ms 拉取權威狀態
+    const INPUT_CONSUME_MS = 150;     // 每 150ms 消費一次輸入
     const MAX_INPUTS_QUEUED = 5;      // 最多排隊 5 個未處理輸入
 
     /**
@@ -33,6 +34,7 @@ const SyncEngine = (() => {
         // Timers & subscriptions
         let inputTimer = null;
         let statePollTimer = null;
+        let inputConsumeTimer = null;
         let roomSub = null;
         let stateSub = null;
 
@@ -40,12 +42,16 @@ const SyncEngine = (() => {
         let inputQueue = [];
         let lastInputTime = 0;
 
+        // Track processed guest inputs on host side
+        let processedGuestVersions = new Set();
+
         // Callbacks (set by the game controller)
         let onOtherStateUpdate = null;
         let onRoomStatusChange = null;
         let onOpponentDisconnected = null;
         let onGameStarted = null;
         let onGameStateSynced = null;
+        let onGameInput = null;
 
         // ============ BROADCAST MY STATE (Host → Guest) ============
         function broadcastMyState(gameState) {
@@ -66,6 +72,7 @@ const SyncEngine = (() => {
             const now = Date.now();
             if (now - lastInputTime < INPUT_INTERVAL_MS) return; // Debounce
             lastInputTime = now;
+            lastVersion++; // Increment version for deduplication
 
             // Queue input, process when possible
             inputQueue.push({ type: inputType, ts: now });
@@ -113,6 +120,16 @@ const SyncEngine = (() => {
 
         // ============ UPDATE ROOM ID ============
         function updateRoomId(newRoomId) {
+            // Clean old subscription before creating new one
+            if (stateSub) {
+                try {
+                    const client = supabaseClient.getClient();
+                    if (client && client.channel) {
+                        try { client.channel(stateSub.id)?.unsubscribe?.(); } catch(e) {}
+                    }
+                } catch(e) {}
+                stateSub = null;
+            }
             roomId = newRoomId;
             console.log('[SyncEngine] 房間 ID 更新為:', roomId);
 
@@ -140,6 +157,11 @@ const SyncEngine = (() => {
                         })
                         .catch(err => console.warn('[SyncEngine] 取得最新狀態失敗:', err));
                 }, STATE_POLL_MS);
+            } else if (role === 'host') {
+                inputConsumeTimer = setInterval(() => {
+                    if (!roomId || !supabaseClient.isConnectedState()) return;
+                    consumeGuestInputs();
+                }, INPUT_CONSUME_MS);
             }
         }
 
@@ -148,6 +170,7 @@ const SyncEngine = (() => {
 
             if (inputTimer) { clearInterval(inputTimer); inputTimer = null; }
             if (statePollTimer) { clearInterval(statePollTimer); statePollTimer = null; }
+            if (inputConsumeTimer) { clearInterval(inputConsumeTimer); inputConsumeTimer = null; }
 
             if (roomSub) {
                 try { supabaseClient.getClient()?.channel(roomSub.id)?.unsubscribe?.(); } catch(e) {}
@@ -179,6 +202,30 @@ const SyncEngine = (() => {
             onOpponentDisconnected = disconnectedCb;
             onGameStarted = gameStartedCb;
             onGameStateSynced = gameStateSyncedCb;
+        }
+
+        // ============ CONSUME GUEST INPUTS (Host only) ============
+        function consumeGuestInputs() {
+            if (role !== 'host' || !roomId) return;
+
+            const guestId = ownRoomData?.guest_id;
+            if (!guestId) return;
+
+            const result = supabaseClient.getPendingInputs(roomId, guestId);
+            if (result.error) {
+                console.warn('[SyncEngine] 讀取輸入失敗:', result.error);
+                return;
+            }
+
+            for (const input of result.inputs) {
+                // Deduplicate by input row ID (not version) since Supabase neq(array) is broken
+                if (!processedGuestVersions.has(input.id)) {
+                    processedGuestVersions.add(input.id);
+                    if (onGameInput) {
+                        onGameInput(input.input_type, input.room_id);
+                    }
+                }
+            }
         }
 
         return {

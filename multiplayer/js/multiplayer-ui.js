@@ -6,6 +6,7 @@ const MultiplayerGameController = (() => {
     let mainRenderer = null;
     let syncEngine = null;
     let gameLoopId = null;
+    let keydownHandler = null;
     let currentRoomData = null;
     let currentState = null;
     let gameStarted = false;
@@ -73,6 +74,10 @@ const MultiplayerGameController = (() => {
         if (landingPageEl) landingPageEl.style.display = 'none';
         if (gamePageEl) gamePageEl.style.display = 'flex';
 
+        // Immediately show the room code so user can share it
+        const roomDisplay = document.getElementById('mp-room-display');
+        if (roomDisplay) roomDisplay.textContent = myRoomCode;
+
         mainRenderer = MultiplayerRenderer.create('mp-canvas', 'opponent-canvas', GameCore);
         console.log('[Multiplayer] Renderer created');
 
@@ -92,7 +97,19 @@ const MultiplayerGameController = (() => {
                         if (!currentState) {
                             currentState = newState;
                         } else {
-                            Object.assign(currentState, newState);
+                            // Deep merge: keep own metadata, overwrite game data
+                            currentState.board = newState.board;
+                            currentState.currentPiece = newState.currentPiece;
+                            currentState.nextPieceType = newState.nextPieceType;
+                            currentState.score = newState.score;
+                            currentState.level = newState.level;
+                            currentState.linesCleared = newState.linesCleared;
+                            currentState.bag = newState.bag;
+                            currentState.heldPiece = newState.heldPiece;
+                            currentState.hasHeld = newState.hasHeld;
+                            currentState.gameState = newState.gameState;
+                            currentState._lastClearedCount = newState._lastClearedCount;
+                            currentState._comboCount = newState._comboCount;
                         }
                     } else {
                         // Host: track opponent state separately
@@ -118,6 +135,12 @@ const MultiplayerGameController = (() => {
             () => {
                 const el = document.getElementById('mp-message');
                 if (el) { el.textContent = '對手的連線已中斷'; el.style.display = 'block'; }
+            },
+            (inputType) => {
+                if (myRole === 'host' && currentState && currentState.gameState === 'playing' && currentState.currentPiece) {
+                    console.log('[Multiplayer] Host applying guest input:', inputType);
+                    applyInput(inputType);
+                }
             }
         );
 
@@ -130,6 +153,7 @@ const MultiplayerGameController = (() => {
 
     async function createRoomAndStart(roomCode, hostId) {
         console.log('[Multiplayer] createRoomAndStart called:', { roomCode, hostId });
+        // Room display is already set in startGameLocally
         const result = await SupabaseClient.createRoom(roomCode, hostId);
         console.log('[Multiplayer] createRoom result:', { error: result.error, room: result.room });
         if (result.error) {
@@ -140,8 +164,6 @@ const MultiplayerGameController = (() => {
         currentRoomData = result.room;
         syncEngine.updateRoomId(result.room.id);
         updateMatchUI(result.room, hostId, roomCode);
-        const roomDisplay = document.getElementById('mp-room-display');
-        if (roomDisplay) roomDisplay.textContent = roomCode;
         
         // Host starts game immediately after creating room
         console.log('[Multiplayer] Host starting game loop after room creation');
@@ -243,7 +265,19 @@ const MultiplayerGameController = (() => {
                         if (!currentState) {
                             currentState = newState;
                         } else {
-                            Object.assign(currentState, newState);
+                            // Deep merge: keep own metadata, overwrite game data
+                            currentState.board = newState.board;
+                            currentState.currentPiece = newState.currentPiece;
+                            currentState.nextPieceType = newState.nextPieceType;
+                            currentState.score = newState.score;
+                            currentState.level = newState.level;
+                            currentState.linesCleared = newState.linesCleared;
+                            currentState.bag = newState.bag;
+                            currentState.heldPiece = newState.heldPiece;
+                            currentState.hasHeld = newState.hasHeld;
+                            currentState.gameState = newState.gameState;
+                            currentState._lastClearedCount = newState._lastClearedCount;
+                            currentState._comboCount = newState._comboCount;
                         }
                     } else {
                         // Host: track opponent state separately
@@ -269,6 +303,12 @@ const MultiplayerGameController = (() => {
             () => {
                 const el = document.getElementById('mp-message');
                 if (el) { el.textContent = '對手的連線已中斷'; el.style.display = 'block'; }
+            },
+            (inputType) => {
+                if (myRole === 'host' && currentState && currentState.gameState === 'playing' && currentState.currentPiece) {
+                    console.log('[Multiplayer] setupGameUI: Host applying guest input:', inputType);
+                    applyInput(inputType);
+                }
             }
         );
 
@@ -316,6 +356,12 @@ const MultiplayerGameController = (() => {
 
     // ============ INPUT HANDLING ============
     function setupMultiplayerControls() {
+        // Remove previous handler if exists
+        if (keydownHandler) {
+            document.removeEventListener('keydown', keydownHandler);
+            keydownHandler = null;
+        }
+
         const keyMap = {
             'ArrowLeft':  () => { sendInput('left'); },
             'ArrowRight': () => { sendInput('right'); },
@@ -326,20 +372,46 @@ const MultiplayerGameController = (() => {
             'Escape': () => { showLanding(); }
         };
 
+        keydownHandler = (e) => {
+            const handler = keyMap[e.key];
+            if (handler) { e.preventDefault(); handler(); }
+        };
+        document.addEventListener('keydown', keydownHandler);
+
         const backBtn = document.getElementById('mp-back-btn');
         if (backBtn) backBtn.addEventListener('click', () => showLanding());
 
         setupTouchControls(keyMap);
-
-        document.addEventListener('keydown', (e) => {
-            const handler = keyMap[e.key];
-            if (handler) { e.preventDefault(); handler(); }
-        });
     }
 
     function sendInput(inputType) {
         if (!syncEngine || !currentState || currentState.gameState !== 'playing') return;
         syncEngine.sendInput(inputType);
+    }
+
+    function applyInput(inputType) {
+        if (!currentState || currentState.gameState !== 'playing' || !currentState.currentPiece) return;
+
+        switch (inputType) {
+            case 'left': GameCore.move(currentState, -1, 0); break;
+            case 'right': GameCore.move(currentState, 1, 0); break;
+            case 'down': GameCore.dropPiece(currentState); break;
+            case 'rotate': GameCore.tryRotate(currentState); break;
+            case 'hard_drop':
+                GameCore.hardDrop(currentState);
+                const info = GameCore.commitHardDrop(currentState);
+                if (info.clearedCount > 0) {
+                    // Broadcast immediately so guest sees the clear
+                    syncEngine.broadcastMyState(currentState);
+                }
+                break;
+            case 'hold':
+                GameCore.holdPiece(currentState);
+                // Broadcast handled below
+                break;
+        }
+        // Broadcast final state after all input handling
+        syncEngine.broadcastMyState(currentState);
     }
 
     function setupTouchControls(keyMap) {
@@ -411,7 +483,7 @@ const MultiplayerGameController = (() => {
         const landingPageEl = document.getElementById('landing-page');
         const gamePageEl = document.getElementById('game-page');
         if (landingPageEl) landingPageEl.style.display = 'flex';
-        if (gamePageEl) landingPageEl.style.display = 'none';
+        if (gamePageEl) gamePageEl.style.display = 'none';
         const joinForm = document.getElementById('join-form-inline');
         if (joinForm) joinForm.classList.remove('active');
     }

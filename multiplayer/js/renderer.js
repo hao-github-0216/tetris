@@ -270,11 +270,9 @@ const MultiplayerRenderer = (() => {
         function updateOpponentInfo(snapshot) {
             const scoreEl = document.getElementById('mp-other-score');
             const levelEl = document.getElementById('mp-other-level');
-            const linesEl = document.getElementById('mp-other-lines');
 
             if (scoreEl) scoreEl.textContent = (snapshot.score || 0).toLocaleString();
             if (levelEl) levelEl.textContent = (snapshot.level || 1);
-            if (linesEl) linesEl.textContent = (snapshot.linesCleared || 0);
         }
 
         // ============ FULL RENDER ============
